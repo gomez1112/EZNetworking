@@ -24,6 +24,7 @@ extension APIRequest {
         guard let url = components.url else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
+        
         if let headers = self.headers {
             request.allHTTPHeaderFields = headers
         }

@@ -38,6 +38,7 @@ public enum APIError: Error, LocalizedError, Equatable {
                 return "An unknown error has occurred."
         }
     }
+    
     public static func == (lhs: APIError, rhs: APIError) -> Bool {
         switch (lhs, rhs) {
             case (.invalidURL, .invalidURL),
