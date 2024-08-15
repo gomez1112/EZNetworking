@@ -33,10 +33,10 @@ public protocol APIRequest: Sendable {
 ///
 /// Each case corresponds to a standard HTTP method, such as `GET`, `POST`, `PUT`, etc.
 public enum HTTPMethod: String, Sendable {
-    case delete, get, patch, post, put
-    /// A computed property that returns the HTTP method as an uppercase string.
-    /// - Example: For `.get`, this returns `"GET"`.
-    public var title: String {
-        rawValue.uppercased()
-    }
+    case delete = "DELETE"
+    case get = "GET"
+    case patch = "PATCH"
+    case post = "POST"
+    case put = "PUT"
+    
 }
