@@ -26,7 +26,7 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         baseURL: String,
         path: String,
         queryItems: [URLQueryItem]? = nil,
-        method: HTTPMethod = .get,
+        method: HTTPMethod = .post,
         headers: [String: String]? = nil,
         httpBody: T? = nil // Optional body parameter
     ) {
@@ -57,7 +57,7 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         baseURL: String,
         path: String,
         queryItems: [URLQueryItem]? = nil,
-        method: HTTPMethod = .get,
+        method: HTTPMethod = .post,
         headers: [String: String]? = nil,
         postData: Data? = nil
     ) {
