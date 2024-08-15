@@ -6,21 +6,35 @@
 //
 
 import Foundation
-
+/// An actor responsible for managing network requests and decoding responses.
+///
+/// The `Client` actor provides a safe and efficient way to fetch data from APIs,
+/// ensuring that network requests and response decoding are performed in a thread-safe manner.
 public actor Client: NetworkService {
-    private lazy var decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .deferredToDate
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return decoder
-    }()
-    
+    /// The `JSONDecoder` instance used for decoding responses.
+    /// This can be customized to allow different decoding strategies.
+    private let decoder: JSONDecoder
+    /// The downloader responsible for fetching data from URLs.
+    /// The default implementation uses `URLSession`, but any type conforming to `HTTPDownloader` can be used.
     private let downloader: any HTTPDownloader
     
-    public init(downloader: any HTTPDownloader = URLSession.shared) {
+    /// Initializes a new client instance.
+    /// - Parameters:
+    ///   - downloader: The downloader to use for HTTP requests. Defaults to `URLSession.shared`.
+    ///   - decoder: A custom `JSONDecoder` to use for decoding responses. Defaults to a decoder with `deferredToDate` and `convertFromSnakeCase` strategies.
+    public init(downloader: any HTTPDownloader = URLSession.shared, decoder: JSONDecoder = JSONDecoder()) {
         self.downloader = downloader
+        self.decoder = decoder
+        // Set default decoding strategies if not provided
+        self.decoder.dateDecodingStrategy = .deferredToDate
+        self.decoder.keyDecodingStrategy = .convertFromSnakeCase
     }
-    private func decodeData<T: Codable>(_ data: Data) throws -> T {
+    /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
+    ///
+    /// - Parameter data: The data to decode.
+    /// - Returns: The decoded object of type `T`.
+    /// - Throws: An `APIError.decodingError` if the data cannot be decoded.
+    private func decode<T: Codable>(_ data: Data) throws -> T {
         do {
             return try decoder.decode(T.self, from: data)
         } catch let error as DecodingError {
@@ -30,12 +44,24 @@ public actor Client: NetworkService {
             throw APIError.unknownError
         }
     }
-    private func downloadData<T: APIRequest>(from request: T) async throws -> Data {
+    /// Downloads data for the given API request.
+    ///
+    /// - Parameter request: The API request to download data for.
+    /// - Returns: The downloaded data.
+    /// - Throws: An `APIError.invalidURL` if the URL is invalid, or other errors related to the network or HTTP status.
+    private func downloadData<T: APIRequest>(for request: T) async throws -> Data {
         guard let url = request.urlRequest?.url else { throw APIError.invalidURL }
         return try await downloader.httpData(from: url)
     }
+    /// Fetches data from the provided API request and decodes it into the specified response type.
+    ///
+    /// This method combines downloading and decoding into a single, thread-safe operation.
+    ///
+    /// - Parameter request: The API request object.
+    /// - Returns: The decoded response object of the associated type `T.Response`.
+    /// - Throws: An error if the data cannot be fetched or decoded.
     public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
-        let data = try await downloadData(from: request)
-        return try decodeData(data)
+        let data = try await downloadData(for: request)
+        return try decode(data)
     }
 }

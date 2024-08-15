@@ -7,13 +7,23 @@
 
 import Foundation
 
+/// An enumeration representing errors that can occur during an API request.
 public enum APIError: Error, LocalizedError {
+    /// The URL provided was invalid.
     case invalidURL
+    /// The HTTP request failed with a specific status code and description.
+    /// - Parameters:
+    ///   - statusCode: The HTTP status code that was returned.
+    ///   - description: A human-readable description of the status code.
     case httpStatusCodeFailed(statusCode: Int, description: String)
+    /// The response could not be decoded due to an underlying decoding error.
+    /// - Parameter underlyingError: The error that occurred during decoding.
     case decodingError(underlyingError: Error)
+    /// A network error occurred, typically due to connectivity issues.
     case networkError
     case unknownError
     
+    /// Provides a localized description for the error, useful for displaying user-friendly error messages.
     public var errorDescription: String? {
         switch self {
             case .invalidURL:

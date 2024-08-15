@@ -8,10 +8,15 @@
 import Foundation
 
 extension APIRequest {
+    /// Default headers for the request.
     public var headers: [String: String]? { nil }
+    /// Default data for the request body.
     public var postData: Data? { nil }
+    /// HTTP method to use for the request.
     public var method: HTTPMethod { .get }
     
+    /// Constructs a `URLRequest` using the properties provided by the `APIRequest`.
+    /// - Returns: A `URLRequest` object if the URL can be constructed, otherwise `nil`.
     public var urlRequest: URLRequest? {
         var components = baseURLComponents
         components.queryItems = queryItems
