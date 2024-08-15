@@ -9,7 +9,7 @@ import Foundation
 
 extension APIRequest {
     /// Default headers for the request.
-    public var headers: [String: String]? { nil }
+    public var headers: [String: String]? { ["Content-Type": "application/json"] }
     /// Default data for the request body.
     public var postData: Data? { nil }
     /// HTTP method to use for the request.
