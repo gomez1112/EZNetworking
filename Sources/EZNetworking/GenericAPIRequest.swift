@@ -62,7 +62,7 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         postData: Data? = nil
     ) {
         var components = URLComponents(string: baseURL)!
-        components.path = path
+        components.path = path.appending(path)
         self.baseURLComponents = components
         self.queryItems = queryItems
         self.method = method
