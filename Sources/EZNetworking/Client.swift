@@ -27,7 +27,6 @@ public actor Client: NetworkService {
         self.decoder = decoder
         // Set default decoding strategies if not provided
         self.decoder.dateDecodingStrategy = .deferredToDate
-        self.decoder.keyDecodingStrategy = .convertFromSnakeCase
     }
     /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
     ///
