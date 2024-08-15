@@ -8,7 +8,7 @@
 import Foundation
 
 /// An enumeration representing errors that can occur during an API request.
-public enum APIError: Error, LocalizedError, Equatable {
+public enum APIError: Error, LocalizedError {
     /// The URL provided was invalid.
     case invalidURL
     /// The HTTP request failed with a specific status code and description.
@@ -36,21 +36,6 @@ public enum APIError: Error, LocalizedError, Equatable {
                 return "There was a network error."
             case .unknownError:
                 return "An unknown error has occurred."
-        }
-    }
-    
-    public static func == (lhs: APIError, rhs: APIError) -> Bool {
-        switch (lhs, rhs) {
-            case (.invalidURL, .invalidURL),
-                (.networkError, .networkError),
-                (.unknownError, .unknownError):
-                return true
-            case let (.httpStatusCodeFailed(code1, _), .httpStatusCodeFailed(code2, _)):
-                return code1 == code2
-            case (.decodingError, .decodingError):
-                return true // Note: This doesn't compare the underlying errors
-            default:
-                return false
         }
     }
 }

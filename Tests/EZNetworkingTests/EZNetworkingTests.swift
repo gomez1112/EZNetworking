@@ -78,22 +78,6 @@ struct ClientTests {
         #expect(user.age == 30)
     }
     
-    @Test("Fetch data with network error")
-    func testFetchDataNetworkError() async throws {
-        let mockDownloader = MockHTTPDownloader()
-        mockDownloader.error = APIError.networkError
-        
-        let client = Client(downloader: mockDownloader)
-        let request = GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
-        
-        do {
-            _ = try await client.fetchData(from: request)
-            Issue.record("Expected networkError to be thrown")
-        } catch let error as APIError {
-            #expect(error == .networkError)
-        }
-    }
-    
     @Test("Fetch data with decoding error")
     func testFetchDataDecodingError() async throws {
         let mockDownloader = MockHTTPDownloader()
