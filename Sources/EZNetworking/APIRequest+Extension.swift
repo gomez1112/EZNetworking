@@ -13,7 +13,7 @@ extension APIRequest {
     /// Default data for the request body.
     public var postData: Data? { nil }
     /// HTTP method to use for the request.
-    public var method: HTTPMethod { .get }
+    public var method: HTTPMethod { .post }
     
     /// Constructs a `URLRequest` using the properties provided by the `APIRequest`.
     /// - Returns: A `URLRequest` object if the URL can be constructed, otherwise `nil`.
