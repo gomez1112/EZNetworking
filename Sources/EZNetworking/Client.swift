@@ -33,7 +33,7 @@ public actor Client: NetworkService {
     /// - Parameter data: The data to decode.
     /// - Returns: The decoded object of type `T`.
     /// - Throws: An `APIError.decodingError` if the data cannot be decoded.
-    private func decode<T: Codable>(_ data: Data) throws -> T {
+    public func decode<T: Codable>(_ data: Data) throws -> T {
         do {
             return try decoder.decode(T.self, from: data)
         } catch let error as DecodingError {
@@ -49,8 +49,8 @@ public actor Client: NetworkService {
     /// - Returns: The downloaded data.
     /// - Throws: An `APIError.invalidURL` if the URL is invalid, or other errors related to the network or HTTP status.
     private func downloadData<T: APIRequest>(for request: T) async throws -> Data {
-        guard let url = request.urlRequest?.url else { throw APIError.invalidURL }
-        return try await downloader.httpData(from: url)
+        guard let urlRequest = request.urlRequest else { throw APIError.invalidURL }
+        return try await downloader.httpData(from: urlRequest.url!)
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
     ///

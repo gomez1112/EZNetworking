@@ -18,22 +18,21 @@ extension APIRequest {
     /// Constructs a `URLRequest` using the properties provided by the `APIRequest`.
     /// - Returns: A `URLRequest` object if the URL can be constructed, otherwise `nil`.
     public var urlRequest: URLRequest? {
-        var url = (self as? GenericAPIRequest<Response>)?.url ?? URL(string: "")!
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         
         // If there are query items, add them to the URL
-        if let queryItems = (self as? GenericAPIRequest<Response>)?.queryItems {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            components?.queryItems = queryItems
-            url = components?.url ?? url
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
+        components.queryItems = queryItems
+        guard let finalURL = components.url else { return nil }
+        var request = URLRequest(url: finalURL)
         
-        if let headers = self.headers {
-            request.allHTTPHeaderFields = headers
-        }
-        if let data = postData {
-            request.httpBody = data
+        request.httpMethod = method.rawValue
+        request.allHTTPHeaderFields = headers
+        request.httpBody = postData
+        print("Final Request URL: \(request.url?.absoluteString ?? "NA")")
+        print("Final HTTP Method: \(request.httpMethod ?? "NA")")
+        print("Final Request Headers: \(request.allHTTPHeaderFields ?? [:])")
+        if let postData = request.httpBody, let jsonString = String(data: postData, encoding: .utf8) {
+            print("Final Request Body: \(jsonString)")
         }
         return request
     }

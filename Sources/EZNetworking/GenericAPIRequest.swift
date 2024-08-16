@@ -27,21 +27,14 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         path: String,
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
-        headers: [String: String]? = nil,
+        headers: [String: String]? = ["Content-Type": "application/json"],
         httpBody: T? = nil // Optional body parameter
     ) {
-        let baseURL = URL(string: baseURL)!
-        self.url = baseURL.appendingPathComponent(path)
+        self.url = URL(string: baseURL)!.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
-        
-        // Encode the body to JSON if provided
-        if let httpBody = httpBody {
-            self.postData = try? JSONEncoder().encode(httpBody)
-        } else {
-            self.postData = nil
-        }
+        self.postData = httpBody.flatMap { try? JSONEncoder().encode($0)}
     }
     
     /// Initializes a new API request.
@@ -57,11 +50,10 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         path: String,
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
-        headers: [String: String]? = nil,
+        headers: [String: String]? = ["Content-Type": "application/json"],
         postData: Data? = nil
     ) {
-        let baseURL = URL(string: baseURL)!
-        self.url = baseURL.appendingPathComponent(path)
+        self.url = URL(string: baseURL)!.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
@@ -71,9 +63,6 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
     /// Adds a new query item to the existing query items.
     /// - Parameter item: The query item to add.
     public mutating func addQueryItem(_ item: URLQueryItem) {
-        if self.queryItems == nil {
-            self.queryItems = []
-        }
         self.queryItems?.append(item)
     }
 }
