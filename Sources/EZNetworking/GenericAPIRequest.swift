@@ -7,14 +7,16 @@
 
 import Foundation
 
-public struct GenericAPIRequest<Response: Codable>: APIRequest {
+/// A generic structure for making API requests with custom response types.
+public struct GenericAPIRequest<Response: Codable & Sendable>: APIRequest {
     public var url: URL
     public var queryItems: [URLQueryItem]?
     public var method: HTTPMethod
     public var headers: [String : String]?
-    public var postData: Data?
+    public var bodyData: Data?
     
     /// Initializes a new API request.
+    ///
     /// - Parameters:
     ///   - baseURL: The base URL as a string.
     ///   - path: The path to append to the base URL.
@@ -28,41 +30,47 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        httpBody: T? = nil // Optional body parameter
+        body: T? = nil // Optional body parameter
     ) {
-        self.url = URL(string: baseURL)!.appendingPathComponent(path)
+        guard let base = URL(string: baseURL) else { fatalError("Invalid base URL")}
+        self.url = base.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
-        self.postData = httpBody.flatMap { try? JSONEncoder().encode($0)}
+        self.bodyData = body.flatMap { try? JSONEncoder().encode($0)}
     }
     
     /// Initializes a new API request.
+    ///
     /// - Parameters:
     ///   - baseURL: The base URL as a string.
     ///   - path: The path to append to the base URL.
     ///   - queryItems: An optional array of query items to include in the URL.
     ///   - method: The HTTP method to use. Defaults to `GET`.
     ///   - headers: An optional dictionary of HTTP headers to include in the request.
-    ///   - postData: Optional raw data to include in the request body.
+    ///   - bodyData: Optional raw data to include in the request body.
     public init(
         baseURL: String,
         path: String,
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        postData: Data? = nil
+        bodyData: Data? = nil
     ) {
         self.url = URL(string: baseURL)!.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
-        self.postData = postData
+        self.bodyData = bodyData
     }
     
     /// Adds a new query item to the existing query items.
+    ///
     /// - Parameter item: The query item to add.
     public mutating func addQueryItem(_ item: URLQueryItem) {
+        if self.queryItems == nil {
+            self.queryItems = []
+        }
         self.queryItems?.append(item)
     }
 }

@@ -27,6 +27,7 @@ public actor Client: NetworkService {
         self.decoder = decoder
         // Set default decoding strategies if not provided
         self.decoder.dateDecodingStrategy = .deferredToDate
+        self.decoder.keyDecodingStrategy = .useDefaultKeys
     }
     /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
     ///
@@ -50,17 +51,22 @@ public actor Client: NetworkService {
     /// - Throws: An `APIError.invalidURL` if the URL is invalid, or other errors related to the network or HTTP status.
     private func downloadData<T: APIRequest>(for request: T) async throws -> Data {
         guard let urlRequest = request.urlRequest else { throw APIError.invalidURL }
-        return try await downloader.httpData(from: urlRequest.url!)
+        return try await downloader.httpData(from: urlRequest)
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
-    ///
-    /// This method combines downloading and decoding into a single, thread-safe operation.
     ///
     /// - Parameter request: The API request object.
     /// - Returns: The decoded response object of the associated type `T.Response`.
     /// - Throws: An error if the data cannot be fetched or decoded.
     public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
         let data = try await downloadData(for: request)
+        
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("Raw Response Data: \(jsonString)")
+        } else {
+            print("Failed to convert data to string")
+        }
+        
         return try decode(data)
     }
 }

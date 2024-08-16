@@ -11,7 +11,7 @@ extension APIRequest {
     /// Default headers for the request.
     public var headers: [String: String]? { ["Content-Type": "application/json"] }
     /// Default data for the request body.
-    public var postData: Data? { nil }
+    public var bodyData: Data? { nil }
     /// HTTP method to use for the request.
     public var method: HTTPMethod { .get }
     
@@ -27,7 +27,7 @@ extension APIRequest {
         
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
-        request.httpBody = postData
+        request.httpBody = bodyData
         print("Final Request URL: \(request.url?.absoluteString ?? "NA")")
         print("Final HTTP Method: \(request.httpMethod ?? "NA")")
         print("Final Request Headers: \(request.allHTTPHeaderFields ?? [:])")

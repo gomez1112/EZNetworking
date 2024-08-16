@@ -14,7 +14,7 @@ import Foundation
 /// HTTP method, headers, query items, and any data to be sent in the body of the request.
 public protocol APIRequest: Sendable {
     /// The type of the response that will be returned by this API request.
-    associatedtype Response: Codable
+    associatedtype Response: Codable & Sendable
     /// The base URL components for the API request, which typically includes the scheme, host, and path.
     /// - Example: `https://api.example.com/v1/`
     var url: URL { get }
@@ -27,7 +27,7 @@ public protocol APIRequest: Sendable {
     /// - Example: `["Authorization": "Bearer token"]`
     var headers: [String: String]? { get }
     /// The data to be sent in the body of the request, typically for `POST` or `PUT` requests.
-    var postData: Data? { get }
+    var bodyData: Data? { get }
 }
 /// An enumeration representing the various HTTP methods that can be used in a network request.
 ///

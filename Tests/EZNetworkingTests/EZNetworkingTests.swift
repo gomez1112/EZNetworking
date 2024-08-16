@@ -24,7 +24,7 @@ struct GenericAPIRequestTests {
         #expect(request.url.string == "https://api.example.com/users")
         #expect(request.method == .get)
         #expect(request.headers == nil)
-        #expect(request.postData == nil)
+        #expect(request.bodyData == nil)
     }
     @Test("Initialize GenericAPIRequest with all parameters")
     func testFullInitialization() throws {
@@ -44,7 +44,7 @@ struct GenericAPIRequestTests {
         #expect(request.queryItems?.count == 1)
         #expect(request.method == .post)
         #expect(request.headers?["Authorization"] == "Bearer token")
-        #expect(request.postData != nil)
+        #expect(request.bodyData != nil)
     }
     @Test("Add query item to GenericAPIRequest")
     func testAddQueryItem() throws {

@@ -9,6 +9,7 @@ import Foundation
 
 public protocol NetworkService {
     /// Fetches data from the provided API request.
+    ///
     /// - Parameter request: The API request object.
     /// - Returns: The decoded response.
     /// - Throws: An error if the data cannot be fetched or decoded.
@@ -19,5 +20,5 @@ public protocol HTTPDownloader: Sendable {
     /// - Parameter url: The URL to download data from.
     /// - Returns: The downloaded data.
     /// - Throws: An error if the data cannot be downloaded.
-    func httpData(from: URL) async throws -> Data
+    func httpData(from request: URLRequest) async throws -> Data
 }
