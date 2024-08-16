@@ -28,12 +28,6 @@ extension APIRequest {
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
         request.httpBody = bodyData
-        print("Final Request URL: \(request.url?.absoluteString ?? "NA")")
-        print("Final HTTP Method: \(request.httpMethod ?? "NA")")
-        print("Final Request Headers: \(request.allHTTPHeaderFields ?? [:])")
-        if let postData = request.httpBody, let jsonString = String(data: postData, encoding: .utf8) {
-            print("Final Request Body: \(jsonString)")
-        }
         return request
     }
 }
