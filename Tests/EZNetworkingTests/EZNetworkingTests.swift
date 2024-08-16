@@ -7,7 +7,7 @@ class MockHTTPDownloader: HTTPDownloader, @unchecked Sendable {
     var data: Data? = nil
     var error: Error? = nil
     
-    func httpData(from url: URL) async throws -> Data {
+    func httpData(from request: URLRequest) async throws -> Data {
         if let error = error {
             throw error
         }
@@ -19,11 +19,14 @@ class MockHTTPDownloader: HTTPDownloader, @unchecked Sendable {
 struct GenericAPIRequestTests {
     @Test("Initialize GenericAPIRequest with basic parameters")
     func testBasicInitialization() throws {
-        let request = GenericAPIRequest<String>(baseURL: "https://api.example.com", path: "/users")
+        let headers = ["Content-Type": "application/json"]
+        let baseURL = "https://api.example.com/"
+        let path = "users"
+        let request = GenericAPIRequest<String>(baseURL: baseURL, path: path, headers: headers)
         
-        #expect(request.url.string == "https://api.example.com/users")
+        #expect(request.url.deletingLastPathComponent().absoluteString == baseURL)
         #expect(request.method == .get)
-        #expect(request.headers == nil)
+        #expect(request.headers == headers)
         #expect(request.bodyData == nil)
     }
     @Test("Initialize GenericAPIRequest with all parameters")
@@ -38,9 +41,9 @@ struct GenericAPIRequestTests {
             queryItems: queryItems,
             method: .post,
             headers: headers,
-            httpBody: body
+            body: body
         )
-        #expect(request.url.string == "https://api.example.com/users")
+        #expect(request.url.absoluteString == "https://api.example.com/users")
         #expect(request.queryItems?.count == 1)
         #expect(request.method == .post)
         #expect(request.headers?["Authorization"] == "Bearer token")
