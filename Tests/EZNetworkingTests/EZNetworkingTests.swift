@@ -21,7 +21,7 @@ struct GenericAPIRequestTests {
     func testBasicInitialization() throws {
         let request = GenericAPIRequest<String>(baseURL: "https://api.example.com", path: "/users")
         
-        #expect(request.baseURLComponents.string == "https://api.example.com/users")
+        #expect(request.url.string == "https://api.example.com/users")
         #expect(request.method == .get)
         #expect(request.headers == nil)
         #expect(request.postData == nil)
@@ -40,7 +40,7 @@ struct GenericAPIRequestTests {
             headers: headers,
             httpBody: body
         )
-        #expect(request.baseURLComponents.string == "https://api.example.com/users")
+        #expect(request.url.string == "https://api.example.com/users")
         #expect(request.queryItems?.count == 1)
         #expect(request.method == .post)
         #expect(request.headers?["Authorization"] == "Bearer token")

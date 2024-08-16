@@ -8,7 +8,7 @@
 import Foundation
 
 public struct GenericAPIRequest<Response: Codable>: APIRequest {
-    public var baseURLComponents: URLComponents
+    public var url: URL
     public var queryItems: [URLQueryItem]?
     public var method: HTTPMethod
     public var headers: [String : String]?
@@ -30,9 +30,8 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         headers: [String: String]? = nil,
         httpBody: T? = nil // Optional body parameter
     ) {
-        var components = URLComponents(string: baseURL)!
-        components.path = path
-        self.baseURLComponents = components
+        let baseURL = URL(string: baseURL)!
+        self.url = baseURL.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
@@ -61,9 +60,8 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         headers: [String: String]? = nil,
         postData: Data? = nil
     ) {
-        var components = URLComponents(string: baseURL)!
-        components.path = path
-        self.baseURLComponents = components
+        let baseURL = URL(string: baseURL)!
+        self.url = baseURL.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers

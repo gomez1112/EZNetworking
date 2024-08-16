@@ -17,7 +17,7 @@ public protocol APIRequest: Sendable {
     associatedtype Response: Codable
     /// The base URL components for the API request, which typically includes the scheme, host, and path.
     /// - Example: `https://api.example.com/v1/`
-    var baseURLComponents: URLComponents { get }
+    var url: URL { get }
     /// The query items to be included in the URL.
     /// - Example: `?query=example&limit=10`
     var queryItems: [URLQueryItem]? { get }

@@ -18,10 +18,14 @@ extension APIRequest {
     /// Constructs a `URLRequest` using the properties provided by the `APIRequest`.
     /// - Returns: A `URLRequest` object if the URL can be constructed, otherwise `nil`.
     public var urlRequest: URLRequest? {
-        var components = baseURLComponents
-        components.queryItems = queryItems
+        var url = (self as? GenericAPIRequest<Response>)?.url ?? URL(string: "")!
         
-        guard let url = components.url else { return nil }
+        // If there are query items, add them to the URL
+        if let queryItems = (self as? GenericAPIRequest<Response>)?.queryItems {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.queryItems = queryItems
+            url = components?.url ?? url
+        }
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         
