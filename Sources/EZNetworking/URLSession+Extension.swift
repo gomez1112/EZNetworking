@@ -8,12 +8,16 @@
 import Foundation
 
 /// Extends `URLSession` to conform to the `HTTPDownloader` protocol, enabling it to be used for downloading data asynchronously.
+///
+/// This extension allows `URLSession` to serve as an implementation of the `HTTPDownloader` protocol, providing the necessary functionality to download data from a specified URL via an asynchronous method.
+///
 extension URLSession: HTTPDownloader {
     /// Downloads data asynchronously from the specified URL.
     ///
-    /// This method uses the `URLSession`'s `data(for:)` method to perform the network request and handle the response. It checks the response to ensure it is an HTTP response and that the status code indicates success.
+    /// This method leverages `URLSession`'s `data(for:)` method to perform the network request and handle the response.
+    /// It validates the response to ensure it is an HTTP response and checks that the status code indicates success (within the range 200...299).
     ///
-    /// - Parameter url: The URL from which to download data.
+    /// - Parameter request: The `URLRequest` object representing the URL from which to download data.
     /// - Returns: The downloaded data if the request is successful.
     /// - Throws: An `APIError.networkError` if the response is not an HTTP response, or `APIError.httpStatusCodeFailed` if the HTTP status code indicates a failure.
     public func httpData(from request: URLRequest) async throws -> Data {

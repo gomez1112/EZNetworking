@@ -3,7 +3,7 @@ import Testing
 @testable import EZNetworking
 
 // Mock HTTPDownloader for testing
-class MockHTTPDownloader: HTTPDownloader, @unchecked Sendable {
+class MockHTTPDownloader: HTTPDownloader {
     var data: Data? = nil
     var error: Error? = nil
     

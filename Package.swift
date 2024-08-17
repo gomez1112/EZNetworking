@@ -20,6 +20,7 @@ let package = Package(
         .testTarget(
             name: "EZNetworkingTests",
             dependencies: ["EZNetworking"]
-        ),
-    ]
+        )
+    ],
+    swiftLanguageModes: [.v6]
 )

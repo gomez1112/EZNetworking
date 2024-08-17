@@ -1,0 +1,12 @@
+@Tutorials(name: "EZNetworking") {
+    @Intro(title: "Meet EZNetworking") {
+        Create network requests and API interactions using EZNetworking. Get started with EZNetworking by building the demo app Restaurant
+        
+        @Image(source: hamburger.png, alt: "Person eating a hamburger.")
+    }
+    @Chapter(name: "EZNetworking Essentials") {
+        @Image(source: chef.png, alt: "Person representing a chef.")
+        Make network requests for downloading data.
+        @TutorialReference(tutorial: "doc:DownloadingData")
+    }
+}

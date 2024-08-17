@@ -1,0 +1,14 @@
+@Tutorial(time: 30) {
+    @Intro(title: "Downloading data") {
+        This tutorial guides you
+        
+    }
+    
+    @Section(title: "Create a new project and add EZNetworking") {
+        @Steps {
+            @Step {
+                Create a new project using the iOS App Template.
+            }
+        }
+    }
+}
