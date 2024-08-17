@@ -21,6 +21,5 @@ let package = Package(
             name: "EZNetworkingTests",
             dependencies: ["EZNetworking"]
         )
-    ],
-    swiftLanguageModes: [.v6]
+    ]
 )
