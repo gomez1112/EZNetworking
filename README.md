@@ -17,7 +17,7 @@ To integrate EZNetworking into your project using Swift Package Manager, add the
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/EZNetworking.git", from: "1.0.0")
+    .package(url: "https://github.com/yourusername/EZNetworking.git", from: "1.5.1")
 ]
 ```
 ## Usage
