@@ -3,7 +3,7 @@ import Testing
 @testable import EZNetworking
 
 // Mock HTTPDownloader for testing
-class MockHTTPDownloader: HTTPDownloader {
+struct MockHTTPDownloader: HTTPDownloader {
     var data: Data? = nil
     var error: Error? = nil
     
@@ -64,7 +64,7 @@ struct GenericAPIRequestTests {
 struct ClientTests {
     @Test("Fetch data successfully")
     func testFetchDataSuccess() async throws {
-        let mockDownloader = MockHTTPDownloader()
+        var mockDownloader = MockHTTPDownloader()
         mockDownloader.data = """
         {
             "name": "John Doe",
@@ -83,7 +83,7 @@ struct ClientTests {
     
     @Test("Fetch data with decoding error")
     func testFetchDataDecodingError() async throws {
-        let mockDownloader = MockHTTPDownloader()
+        var mockDownloader = MockHTTPDownloader()
         mockDownloader.data = """
         {
             "invalid": "data"
