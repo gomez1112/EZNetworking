@@ -4,10 +4,12 @@ EZNetworking is a Swift package designed to simplify network requests and API in
 
 ## Features
 
-- **Flexible Network Service**: Easily fetch data from APIs using a protocol-oriented approach.
+- **Protocol-Oriented Design**: Leverage protocols like `APIRequest` and `HTTPDownloader` to create customizable network requests and responses.
+- **Default Implementations**: Simplify your network code with default headers, body data, and HTTP method handling.
 - **Customizable JSON Decoding**: Inject your own `JSONDecoder` to handle various decoding strategies.
 - **Error Handling**: Comprehensive error handling with detailed localized error descriptions.
 - **Extensible Request Building**: Create and modify API requests with flexible query items and HTTP methods.
+- **Actor-Based Networking**: Utilize Swift's `actor` model to safely manage concurrent network requests.
 
 ## Installation
 
@@ -23,7 +25,7 @@ dependencies: [
 ## Usage
 
 ### Creating a Client
-The `Client` actor is the primary component for making network requests. You can customize it with your own `HTTPDownloader` and `JSONDecoder` if needed.
+The Client actor is the primary component for making network requests. You can customize it with your own `HTTPDownloader` and `JSONDecoder` if needed.
 
 ```swift
 import EZNetworking
@@ -58,6 +60,35 @@ Task {
         print("Failed to fetch data: \(error.localizedDescription)")
     }
 }
+```
+### Using an API Key
+If your API requires an API key, you can include it in the headers of your request:
+```swift
+let url = "https://api.example.com"
+let path = "/data"
+let headers = ["Authorization": "Bearer YOUR_API_KEY"]
+
+let request = GenericAPIRequest<MyDataModel>(
+    baseURL: url,
+    path: path,
+    headers: headers
+)
+```
+### Using Query Items
+If you need to include query parameters in your API request, you can use the queryItems property:
+```swift
+let url = "https://api.example.com"
+let path = "/search"
+let queryItems = [
+    URLQueryItem(name: "query", value: "Swift"),
+    URLQueryItem(name: "limit", value: "10")
+]
+
+let request = GenericAPIRequest<MySearchResults>(
+    baseURL: url,
+    path: path,
+    queryItems: queryItems
+)
 ```
 ### Error Handling
 EZNetworking provides detailed error handling through the `APIError` enum:
