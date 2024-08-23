@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 /// An actor responsible for managing network requests and decoding responses.
 ///
 /// The `Client` actor provides a safe and efficient way to fetch data from APIs,
@@ -43,6 +44,7 @@ public actor Client: NetworkService {
         // Set default decoding strategies if not provided
         self.decoder.dateDecodingStrategy = .deferredToDate
         self.decoder.keyDecodingStrategy = .useDefaultKeys
+        Logger.networking.info("Client initialized with custom decoder and downloader.")
     }
     /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
     ///
@@ -56,8 +58,11 @@ public actor Client: NetworkService {
     
     public func decode<T: Codable>(_ data: Data) throws -> T {
         do {
-            return try decoder.decode(T.self, from: data)
+            let decodedObject = try decoder.decode(T.self, from: data)
+            Logger.networking.debug("Decoded object: \(String(describing: decodedObject))")
+            return decodedObject
         } catch let error as DecodingError {
+            Logger.networking.error("Decoding error: \(error.localizedDescription, privacy: .public)")
             throw APIError.decodingError(underlyingError: error)
         }
         catch {
@@ -75,8 +80,14 @@ public actor Client: NetworkService {
     /// - Throws: An `APIError.invalidURL` if the URL is invalid, or other errors related to the network or HTTP status.
     
     private func downloadData<T: APIRequest>(for request: T) async throws -> Data {
-        guard let urlRequest = request.urlRequest else { throw APIError.invalidURL }
-        return try await downloader.httpData(from: urlRequest)
+        guard let urlRequest = request.urlRequest else {
+            Logger.networking.error("Invalid URLRequest")
+            throw APIError.invalidURL
+        }
+        let data = try await downloader.httpData(from: urlRequest)
+        Logger.networking.debug("Downloaded data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
+        return data
+        
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
     ///
@@ -90,11 +101,11 @@ public actor Client: NetworkService {
     
     public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
         let data = try await downloadData(for: request)
-        
+        Logger.networking.debug("Data received: \(data.count) bytes")
         if let jsonString = String(data: data, encoding: .utf8) {
-            print("Raw Response Data: \(jsonString)")
+            Logger.networking.debug("Raw Response Data: \(jsonString)")
         } else {
-            print("Failed to convert data to string")
+            Logger.networking.error("Failed to convert data to string: privacy: .public)")
         }
         return try decode(data)
     }

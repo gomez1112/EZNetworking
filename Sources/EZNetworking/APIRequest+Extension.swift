@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 
 /// An extension of the `APIRequest` protocol that provides default implementations for some properties and methods.
 ///
@@ -37,16 +38,24 @@ extension APIRequest {
     /// - Returns: A `URLRequest` object if the URL can be constructed, otherwise `nil`.
     
     public var urlRequest: URLRequest? {
-        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            Logger.networking.error("Failed to resolve URL components from \(url.absoluteString, privacy: .public)")
+            return nil
+        }
         
         // If there are query items, add them to the URL
         components.queryItems = queryItems
-        guard let finalURL = components.url else { return nil }
+        guard let finalURL = components.url else {
+            Logger.networking.error("Failed to construct final URL from components: \(components)")
+            return nil
+        }
+        
         var request = URLRequest(url: finalURL)
         
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
         request.httpBody = bodyData
+        Logger.networking.debug("Constructed URLRequest: \(request)")
         return request
     }
 }
