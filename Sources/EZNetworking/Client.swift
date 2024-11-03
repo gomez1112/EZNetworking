@@ -87,7 +87,6 @@ public actor Client: NetworkService {
         let data = try await downloader.httpData(from: urlRequest)
         Logger.networking.debug("Downloaded data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
         return data
-        
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
     ///
