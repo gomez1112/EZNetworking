@@ -1,0 +1,32 @@
+{
+  "configurations" : [
+    {
+      "id" : "F201AD33-650E-4327-B1A2-8017032156D0",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : {
+      "targets" : [
+        {
+          "containerPath" : "container:",
+          "identifier" : "EZNetworking",
+          "name" : "EZNetworking"
+        }
+      ]
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "EZNetworkingTests",
+        "name" : "EZNetworkingTests"
+      }
+    }
+  ],
+  "version" : 1
+}
