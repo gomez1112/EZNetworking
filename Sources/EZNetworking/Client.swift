@@ -14,7 +14,6 @@ import os
 /// By using an actor, the `Client` guarantees that all network operations are safely handled
 /// in a concurrent environment, preventing data races and ensuring data consistency.
 
-nonisolated
 public actor Client: NetworkService {
     /// The `JSONDecoder` instance used for decoding responses.
     ///
