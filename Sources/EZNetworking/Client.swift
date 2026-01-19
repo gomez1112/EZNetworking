@@ -108,4 +108,37 @@ public actor Client: NetworkService {
         }
         return try decode(data)
     }
+
+    /// Fetches data using a retry policy with exponential backoff.
+    ///
+    /// This method retries failed requests based on the provided `RetryPolicy`, including delays between attempts.
+    ///
+    /// - Parameters:
+    ///   - request: The API request object.
+    ///   - retryPolicy: The retry policy that controls attempt counts and delays.
+    /// - Returns: The decoded response object of the associated type `T.Response`.
+    /// - Throws: The last error encountered if all retry attempts fail.
+    public func fetchData<T: APIRequest>(
+        from request: T,
+        retryPolicy: RetryPolicy
+    ) async throws -> T.Response where T.Response: Codable & Sendable {
+        var attempt = 1
+
+        while true {
+            do {
+                return try await fetchData(from: request)
+            } catch {
+                guard attempt < retryPolicy.maximumAttempts, retryPolicy.shouldRetry(error) else {
+                    throw error
+                }
+
+                let delay = retryPolicy.delay(afterAttempt: attempt)
+                Logger.networking.info(
+                    "Retrying request (attempt \(attempt + 1) of \(retryPolicy.maximumAttempts)) after \(delay) due to error: \(error.localizedDescription, privacy: .public)"
+                )
+                try await Task.sleep(for: delay)
+                attempt += 1
+            }
+        }
+    }
 }

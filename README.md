@@ -10,6 +10,7 @@ EZNetworking is a Swift package designed to simplify network requests and API in
 - **Error Handling**: Comprehensive error handling with detailed localized error descriptions.
 - **Extensible Request Building**: Create and modify API requests with flexible query items and HTTP methods.
 - **Actor-Based Networking**: Utilize Swift's `actor` model to safely manage concurrent network requests.
+- **Automatic Retry with Exponential Backoff**: Configure resilient requests with built-in retry policies and jittered delays.
 
 ## Installation
 
@@ -116,6 +117,26 @@ enum APIError: Error, LocalizedError {
     }
 }
 ```
+### Retrying Requests with Backoff (New)
+You can automatically retry failed requests with exponential backoff and jittered delays:
+```swift
+let retryPolicy = RetryPolicy(
+    maximumAttempts: 4,
+    initialDelay: .seconds(0.5),
+    maximumDelay: .seconds(6),
+    multiplier: 2,
+    jitter: .fractional(0.2)
+)
+
+Task {
+    do {
+        let user = try await client.fetchData(from: request, retryPolicy: retryPolicy)
+        print(user.results.first?.name.first ?? "No name")
+    } catch {
+        print("Request failed after retries: \(error.localizedDescription)")
+    }
+}
+```
 ### Testing
 EZNetworking includes a simple testing setup to mock network responses:
 
@@ -125,7 +146,7 @@ import Testing
 
 final class Downloader: HTTPDownloader {
     func httpData(from url: URL) async throws -> Data {
-        try await Task.sleep(nanoseconds: UInt64.random(in: 100_000_000...500_000_000))
+        try await Task.sleep(for: .milliseconds(Int.random(in: 100...500)))
         return testUser
     }
     
