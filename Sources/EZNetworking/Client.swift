@@ -118,6 +118,7 @@ public actor Client: NetworkService {
     ///   - retryPolicy: The retry policy that controls attempt counts and delays.
     /// - Returns: The decoded response object of the associated type `T.Response`.
     /// - Throws: The last error encountered if all retry attempts fail.
+    @available(macOS 13.0, *)
     public func fetchData<T: APIRequest>(
         from request: T,
         retryPolicy: RetryPolicy

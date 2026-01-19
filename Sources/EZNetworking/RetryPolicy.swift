@@ -8,6 +8,7 @@
 import Foundation
 
 /// A policy that controls automatic retries for network requests.
+@available(macOS 13.0, *)
 public struct RetryPolicy: Sendable {
     /// A jitter strategy for retry delays.
     public enum Jitter: Sendable {
