@@ -11,6 +11,7 @@ EZNetworking is a Swift package designed to simplify network requests and API in
 - **Extensible Request Building**: Create and modify API requests with flexible query items and HTTP methods.
 - **Actor-Based Networking**: Utilize Swift's `actor` model to safely manage concurrent network requests.
 - **Automatic Retry with Exponential Backoff**: Configure resilient requests with built-in retry policies and jittered delays.
+- **In-Memory Response Caching**: Opt-in caching with TTL and manual cache clearing.
 
 ## Installation
 
@@ -135,6 +136,20 @@ Task {
     } catch {
         print("Request failed after retries: \(error.localizedDescription)")
     }
+}
+```
+### Caching Responses (New)
+You can enable in-memory caching with a TTL and clear it when needed:
+```swift
+let client = Client(cachePolicy: .memory(ttl: 60))
+
+Task {
+    let user = try await client.fetchData(from: request)
+    print(user.results.first?.name.first ?? "No name")
+}
+
+Task {
+    await client.clearCache()
 }
 ```
 ### Testing

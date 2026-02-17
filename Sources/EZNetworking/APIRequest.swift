@@ -23,7 +23,7 @@ public protocol APIRequest: Sendable {
     /// This associated type defines the expected response type for the API request. The response
     /// the network response and used in a concurrency-safe manner.
     
-    associatedtype Response: Codable
+    associatedtype Response: Codable & Sendable
     /// The base URL for the API request, typically including the scheme, host, and path.
     ///
     /// This property represents the URL where the API request will be sent. It is expected to

@@ -22,6 +22,8 @@ public actor Client: NetworkService {
     /// for dates and the `.useDefaultKeys` strategy for keys.
     
     private let decoder: JSONDecoder
+    private let cachePolicy: CachePolicy
+    private let responseCache: MemoryResponseCache?
     /// The downloader responsible for fetching data from URLs.
     ///
     /// The default implementation uses `URLSession.shared` as the downloader, but any type conforming to
@@ -38,13 +40,28 @@ public actor Client: NetworkService {
     ///   - downloader: The downloader to use for HTTP requests. Defaults to `URLSession.shared`.
     ///   - decoder: A custom `JSONDecoder` to use for decoding responses. Defaults to a decoder with `deferredToDate` and `useDefaultKeys` strategies.
     
-    public init(downloader: any HTTPDownloader = URLSession.shared, decoder: JSONDecoder = JSONDecoder()) {
+    public init(
+        downloader: any HTTPDownloader = URLSession.shared,
+        decoder: JSONDecoder = Client.defaultDecoder(),
+        cachePolicy: CachePolicy = .none
+    ) {
         self.downloader = downloader
         self.decoder = decoder
-        // Set default decoding strategies if not provided
-        self.decoder.dateDecodingStrategy = .deferredToDate
-        self.decoder.keyDecodingStrategy = .useDefaultKeys
+        self.cachePolicy = cachePolicy
+        switch cachePolicy {
+        case .none:
+            self.responseCache = nil
+        case .memory:
+            self.responseCache = MemoryResponseCache()
+        }
         Logger.networking.info("Client initialized with custom decoder and downloader.")
+    }
+
+    public static func defaultDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .deferredToDate
+        decoder.keyDecodingStrategy = .useDefaultKeys
+        return decoder
     }
     /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
     ///
@@ -84,8 +101,21 @@ public actor Client: NetworkService {
             Logger.networking.error("Invalid URLRequest")
             throw APIError.invalidURL
         }
+        if case .memory(let ttl) = cachePolicy, ttl > 0, let responseCache {
+            let key = CacheKey(request: urlRequest)
+            if let cachedData = await responseCache.value(for: key) {
+                Logger.networking.debug("Returning cached data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
+                return cachedData
+            }
+        }
+
         let data = try await downloader.httpData(from: urlRequest)
         Logger.networking.debug("Downloaded data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
+
+        if case .memory(let ttl) = cachePolicy, ttl > 0, let responseCache {
+            let key = CacheKey(request: urlRequest)
+            await responseCache.insert(data, for: key, ttl: ttl)
+        }
         return data
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
@@ -104,9 +134,16 @@ public actor Client: NetworkService {
         if let jsonString = String(data: data, encoding: .utf8) {
             Logger.networking.debug("Raw Response Data: \(jsonString)")
         } else {
-            Logger.networking.error("Failed to convert data to string: privacy: .public)")
+            Logger.networking.error("Failed to convert data to string.")
         }
         return try decode(data)
+    }
+
+    public func clearCache() async {
+        guard let responseCache else {
+            return
+        }
+        await responseCache.removeAll()
     }
 
     /// Fetches data using a retry policy with exponential backoff.
