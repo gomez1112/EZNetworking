@@ -11,7 +11,7 @@ import Foundation
 ///
 /// This extension allows `URLSession` to serve as an implementation of the `HTTPDownloader` protocol, providing the necessary functionality to download data from a specified URL via an asynchronous method.
 ///
-extension URLSession: HTTPDownloader {
+extension URLSession: HTTPResponseDownloader {
     /// Downloads data asynchronously from the specified URL.
     ///
     /// This method leverages `URLSession`'s `data(for:)` method to perform the network request and handle the response.
@@ -20,15 +20,28 @@ extension URLSession: HTTPDownloader {
     /// - Parameter request: The `URLRequest` object representing the URL from which to download data.
     /// - Returns: The downloaded data if the request is successful.
     /// - Throws: An `APIError.networkError` if the response is not an HTTP response, or `APIError.httpStatusCodeFailed` if the HTTP status code indicates a failure.
-    public func httpData(from request: URLRequest) async throws -> Data {
-        let (data, response) = try await data(for: request)
+    public func httpResponse(from request: URLRequest) async throws -> HTTPResponsePayload {
+        let responseData: Data
+        let response: URLResponse
+
+        do {
+            (responseData, response) = try await self.data(for: request)
+        } catch is CancellationError {
+            throw APIError.networkError
+        } catch is URLError {
+            throw APIError.networkError
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.unknownError
+        }
+
         // Ensure the response is an HTTP response
         guard let httpResponse = response as? HTTPURLResponse else { throw APIError.networkError }
         // Check that the HTTP status code is within the success range (200...299)
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.httpStatusCodeFailed(statusCode: httpResponse.statusCode, description: HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode))
         }
-        // Return the downloaded data
-        return data
+        return HTTPResponsePayload(data: responseData, response: response)
     }
 }

@@ -14,6 +14,7 @@ import Foundation
 ///
 /// - Conforms To: `Error`, `LocalizedError`
 public enum APIError: Error, LocalizedError {
+    case invalidBaseURL(String)
     /// The URL provided was invalid.
     ///
     /// This error occurs when an attempt is made to use a malformed or otherwise invalid URL for an API request.
@@ -35,6 +36,7 @@ public enum APIError: Error, LocalizedError {
     /// - Parameter underlyingError: The error that occurred during decoding, providing more context for the failure.
     
     case decodingError(underlyingError: Error)
+    case encodingError(underlyingError: Error)
     /// A network error occurred, typically due to connectivity issues.
     ///
     /// This error occurs when there is a problem with the network connection, preventing the API request from completing.
@@ -55,10 +57,14 @@ public enum APIError: Error, LocalizedError {
         switch self {
             case .invalidURL:
                 return "The URL provided was invalid."
+            case .invalidBaseURL(let urlString):
+                return "The base URL provided was invalid: \(urlString)."
             case .httpStatusCodeFailed(let statusCode, let description):
                 return "HTTP request failed with status code \(statusCode): \(description)."
             case .decodingError(let underlyingError):
                 return "Failed to decode the response: \(underlyingError)."
+            case .encodingError(let underlyingError):
+                return "Failed to encode the request body: \(underlyingError)."
             case .networkError:
                 return "There was a network error."
             case .unknownError:

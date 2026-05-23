@@ -61,6 +61,8 @@ public protocol APIRequest: Sendable {
     /// This is typically used for `POST` or `PUT` requests where data needs to be sent to the server.
     
     var bodyData: Data? { get }
+    /// Optional timeout interval to apply to the URLRequest.
+    var timeoutInterval: TimeInterval? { get }
 }
 
 /// An enumeration representing the various HTTP methods that can be used in a network request.

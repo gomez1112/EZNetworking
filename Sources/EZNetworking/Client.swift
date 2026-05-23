@@ -23,7 +23,9 @@ public actor Client: NetworkService {
     
     private let decoder: JSONDecoder
     private let cachePolicy: CachePolicy
+    private let cacheKeyConfiguration: CacheKeyConfiguration
     private let responseCache: MemoryResponseCache?
+    private let middlewares: [any NetworkMiddleware]
     /// The downloader responsible for fetching data from URLs.
     ///
     /// The default implementation uses `URLSession.shared` as the downloader, but any type conforming to
@@ -39,15 +41,22 @@ public actor Client: NetworkService {
     /// - Parameters:
     ///   - downloader: The downloader to use for HTTP requests. Defaults to `URLSession.shared`.
     ///   - decoder: A custom `JSONDecoder` to use for decoding responses. Defaults to a decoder with `deferredToDate` and `useDefaultKeys` strategies.
+    ///   - cachePolicy: The response cache policy to use.
+    ///   - cacheKeyConfiguration: The request fields used to build cache keys.
+    ///   - middlewares: Middleware components that can adapt requests and preprocess responses.
     
     public init(
         downloader: any HTTPDownloader = URLSession.shared,
         decoder: JSONDecoder = Client.defaultDecoder(),
-        cachePolicy: CachePolicy = .none
+        cachePolicy: CachePolicy = .none,
+        cacheKeyConfiguration: CacheKeyConfiguration = .default,
+        middlewares: [any NetworkMiddleware] = []
     ) {
         self.downloader = downloader
         self.decoder = decoder
         self.cachePolicy = cachePolicy
+        self.cacheKeyConfiguration = cacheKeyConfiguration
+        self.middlewares = middlewares
         switch cachePolicy {
         case .none:
             self.responseCache = nil
@@ -76,7 +85,7 @@ public actor Client: NetworkService {
     public func decode<T: Codable>(_ data: Data) throws -> T {
         do {
             let decodedObject = try decoder.decode(T.self, from: data)
-            Logger.networking.debug("Decoded object: \(String(describing: decodedObject))")
+            Logger.networking.debug("Decoded response as \(String(describing: T.self), privacy: .public)")
             return decodedObject
         } catch let error as DecodingError {
             Logger.networking.error("Decoding error: \(error.localizedDescription, privacy: .public)")
@@ -101,28 +110,35 @@ public actor Client: NetworkService {
             Logger.networking.error("Invalid URLRequest")
             throw APIError.invalidURL
         }
-        if case .memory(let ttl) = cachePolicy, ttl > 0, let responseCache {
-            let key = CacheKey(request: urlRequest)
-            if let cachedData = await responseCache.value(for: key) {
-                Logger.networking.debug("Returning cached data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
+        let preparedRequest = try await applyRequestMiddlewares(to: urlRequest)
+        let cacheKey = cacheKey(for: preparedRequest)
+
+        if let cacheKey, let responseCache {
+            if let cachedData = await responseCache.value(for: cacheKey) {
+                Logger.networking.debug("Returning cached data for \(preparedRequest.url?.absoluteString ?? "unknown URL")")
                 return cachedData
             }
         }
 
-        let data = try await downloader.httpData(from: urlRequest)
-        Logger.networking.debug("Downloaded data for \(urlRequest.url?.absoluteString ?? "unknown URL")")
+        let payload = try await downloadResponse(for: preparedRequest)
+        let context = try await applyResponseMiddlewares(
+            to: NetworkResponseContext(
+                request: preparedRequest,
+                data: payload.data,
+                response: payload.response
+            )
+        )
+        Logger.networking.debug("Downloaded data for \(preparedRequest.url?.absoluteString ?? "unknown URL")")
 
-        if case .memory(let ttl) = cachePolicy, ttl > 0, let responseCache {
-            let key = CacheKey(request: urlRequest)
-            await responseCache.insert(data, for: key, ttl: ttl)
+        if case .memory(let ttl) = cachePolicy, let cacheKey, let responseCache {
+            await responseCache.insert(context.data, for: cacheKey, ttl: ttl)
         }
-        return data
+        return context.data
     }
     /// Fetches data from the provided API request and decodes it into the specified response type.
     ///
     /// This method combines downloading the data and decoding it into the expected response type `T.Response`.
-    /// It prints the raw response data as a string for debugging purposes, and throws an error if the data
-    /// cannot be fetched or decoded.
+    /// It logs response metadata for debugging purposes, and throws an error if the data cannot be fetched or decoded.
     ///
     /// - Parameter request: The API request object.
     /// - Returns: The decoded response object of the associated type `T.Response`.
@@ -131,11 +147,6 @@ public actor Client: NetworkService {
     public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
         let data = try await downloadData(for: request)
         Logger.networking.debug("Data received: \(data.count) bytes")
-        if let jsonString = String(data: data, encoding: .utf8) {
-            Logger.networking.debug("Raw Response Data: \(jsonString)")
-        } else {
-            Logger.networking.error("Failed to convert data to string.")
-        }
         return try decode(data)
     }
 
@@ -155,7 +166,6 @@ public actor Client: NetworkService {
     ///   - retryPolicy: The retry policy that controls attempt counts and delays.
     /// - Returns: The decoded response object of the associated type `T.Response`.
     /// - Throws: The last error encountered if all retry attempts fail.
-    @available(macOS 13.0, *)
     public func fetchData<T: APIRequest>(
         from request: T,
         retryPolicy: RetryPolicy
@@ -174,9 +184,44 @@ public actor Client: NetworkService {
                 Logger.networking.info(
                     "Retrying request (attempt \(attempt + 1) of \(retryPolicy.maximumAttempts)) after \(delay) due to error: \(error.localizedDescription, privacy: .public)"
                 )
-                try await Task.sleep(for: delay)
+                let nanoseconds = UInt64(max(0, delay) * 1_000_000_000)
+                try await Task.sleep(nanoseconds: nanoseconds)
                 attempt += 1
             }
         }
+    }
+
+    private func applyRequestMiddlewares(to request: URLRequest) async throws -> URLRequest {
+        var adaptedRequest = request
+        for middleware in middlewares {
+            adaptedRequest = try await middleware.prepare(adaptedRequest)
+        }
+        return adaptedRequest
+    }
+
+    private func cacheKey(for request: URLRequest) -> CacheKey? {
+        guard case .memory(let ttl) = cachePolicy, ttl > 0 else {
+            return nil
+        }
+        return cacheKeyConfiguration.cacheKey(for: request)
+    }
+
+    private func applyResponseMiddlewares(
+        to context: NetworkResponseContext
+    ) async throws -> NetworkResponseContext {
+        var processedContext = context
+        for middleware in middlewares {
+            processedContext = try await middleware.process(processedContext)
+        }
+        return processedContext
+    }
+
+    private func downloadResponse(for request: URLRequest) async throws -> HTTPResponsePayload {
+        if let responseDownloader = downloader as? any HTTPResponseDownloader {
+            return try await responseDownloader.httpResponse(from: request)
+        }
+
+        let data = try await downloader.httpData(from: request)
+        return HTTPResponsePayload(data: data, response: nil)
     }
 }

@@ -8,7 +8,6 @@
 import Foundation
 
 /// A policy that controls automatic retries for network requests.
-@available(macOS 13.0, *)
 public struct RetryPolicy: Sendable {
     /// A jitter strategy for retry delays.
     public enum Jitter: Sendable {
@@ -21,9 +20,9 @@ public struct RetryPolicy: Sendable {
     /// The maximum number of attempts, including the initial request.
     public let maximumAttempts: Int
     /// The initial delay before the first retry.
-    public let initialDelay: Duration
+    public let initialDelay: TimeInterval
     /// The maximum delay cap for retries.
-    public let maximumDelay: Duration
+    public let maximumDelay: TimeInterval
     /// The multiplier used for exponential backoff.
     public let multiplier: Double
     /// The jitter strategy to apply to delays.
@@ -42,18 +41,18 @@ public struct RetryPolicy: Sendable {
     ///   - shouldRetry: A predicate that determines which errors should be retried.
     public init(
         maximumAttempts: Int = 3,
-        initialDelay: Duration = .seconds(0.5),
-        maximumDelay: Duration = .seconds(8),
+        initialDelay: TimeInterval = 0.5,
+        maximumDelay: TimeInterval = 8,
         multiplier: Double = 2,
         jitter: Jitter = .fractional(0.2),
         shouldRetry: @escaping @Sendable (Error) -> Bool = RetryPolicy.defaultRetryPredicate
     ) {
-        let initialSeconds = max(0, Self.seconds(from: initialDelay))
-        let maximumSeconds = max(initialSeconds, Self.seconds(from: maximumDelay))
+        let initialSeconds = max(0, initialDelay)
+        let maximumSeconds = max(initialSeconds, maximumDelay)
 
         self.maximumAttempts = max(1, maximumAttempts)
-        self.initialDelay = .seconds(initialSeconds)
-        self.maximumDelay = .seconds(maximumSeconds)
+        self.initialDelay = initialSeconds
+        self.maximumDelay = maximumSeconds
         self.multiplier = max(1, multiplier)
         self.jitter = jitter
         self.shouldRetry = shouldRetry
@@ -72,7 +71,7 @@ public struct RetryPolicy: Sendable {
             return (500...599).contains(statusCode)
         case .unknownError:
             return true
-        case .invalidURL, .decodingError:
+        case .invalidBaseURL, .invalidURL, .decodingError, .encodingError:
             return false
         }
     }
@@ -81,12 +80,11 @@ public struct RetryPolicy: Sendable {
     ///
     /// - Parameter attempt: The retry attempt number (starting at 1 for the first retry).
     /// - Returns: The calculated delay.
-    public func delay(afterAttempt attempt: Int) -> Duration {
+    public func delay(afterAttempt attempt: Int) -> TimeInterval {
         let attemptIndex = max(1, attempt)
-        let baseSeconds = Self.seconds(from: initialDelay) * pow(multiplier, Double(attemptIndex - 1))
-        let cappedSeconds = min(baseSeconds, Self.seconds(from: maximumDelay))
-        let jitteredSeconds = applyJitter(to: cappedSeconds)
-        return .seconds(jitteredSeconds)
+        let baseSeconds = initialDelay * pow(multiplier, Double(attemptIndex - 1))
+        let cappedSeconds = min(baseSeconds, maximumDelay)
+        return applyJitter(to: cappedSeconds)
     }
 
     private func applyJitter(to seconds: Double) -> Double {
@@ -102,10 +100,5 @@ public struct RetryPolicy: Sendable {
             let range = (1 - normalized)...(1 + normalized)
             return seconds * Double.random(in: range)
         }
-    }
-
-    private static func seconds(from duration: Duration) -> Double {
-        let components = duration.components
-        return Double(components.seconds) + (Double(components.attoseconds) / 1_000_000_000_000_000_000)
     }
 }

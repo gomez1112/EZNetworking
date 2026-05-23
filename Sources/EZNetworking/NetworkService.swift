@@ -41,3 +41,15 @@ public protocol HTTPDownloader: Sendable {
     /// - Throws: An error if the data cannot be downloaded.
     func httpData(from request: URLRequest) async throws -> Data
 }
+
+/// A downloader that can also return the underlying URL response.
+public protocol HTTPResponseDownloader: HTTPDownloader {
+    /// Downloads data and returns the associated response.
+    func httpResponse(from request: URLRequest) async throws -> HTTPResponsePayload
+}
+
+public extension HTTPResponseDownloader {
+    func httpData(from request: URLRequest) async throws -> Data {
+        try await httpResponse(from: request).data
+    }
+}

@@ -13,12 +13,13 @@ import Foundation
 /// and reusable way to create API requests. It allows you to specify the type of response expected from the API,
 /// as well as various properties such as the URL, HTTP method, headers, query items, and request body.
 
-public struct GenericAPIRequest<Response: Codable>: APIRequest {
+public struct GenericAPIRequest<Response: Codable & Sendable>: APIRequest {
     public var url: URL
     public var queryItems: [URLQueryItem]?
     public var method: HTTPMethod
     public var headers: [String : String]?
     public var bodyData: Data?
+    public var timeoutInterval: TimeInterval?
     
     /// Initializes a new API request with an optional body.
     ///
@@ -39,14 +40,22 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        body: T? = nil // Optional body parameter
-    ) {
-        guard let base = URL(string: baseURL) else { fatalError("Invalid base URL")}
+        body: T? = nil,
+        timeoutInterval: TimeInterval? = nil
+    ) throws {
+        guard let base = URL(string: baseURL) else {
+            throw APIError.invalidBaseURL(baseURL)
+        }
         self.url = base.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
-        self.bodyData = body.flatMap { try? JSONEncoder().encode($0)}
+        self.timeoutInterval = timeoutInterval
+        do {
+            self.bodyData = try body.map { try JSONEncoder().encode($0) }
+        } catch {
+            throw APIError.encodingError(underlyingError: error)
+        }
     }
     
     /// Initializes a new API request with raw body data.
@@ -68,13 +77,18 @@ public struct GenericAPIRequest<Response: Codable>: APIRequest {
         queryItems: [URLQueryItem]? = nil,
         method: HTTPMethod = .get,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        bodyData: Data? = nil
-    ) {
-        self.url = URL(string: baseURL)!.appendingPathComponent(path)
+        bodyData: Data? = nil,
+        timeoutInterval: TimeInterval? = nil
+    ) throws {
+        guard let base = URL(string: baseURL) else {
+            throw APIError.invalidBaseURL(baseURL)
+        }
+        self.url = base.appendingPathComponent(path)
         self.queryItems = queryItems
         self.method = method
         self.headers = headers
         self.bodyData = bodyData
+        self.timeoutInterval = timeoutInterval
     }
     
     /// Adds a new query item to the existing query items.

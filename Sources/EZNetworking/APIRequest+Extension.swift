@@ -29,6 +29,7 @@ extension APIRequest {
     /// The default HTTP method is `GET`, which is typically used for retrieving data from an API.
     
     public var method: HTTPMethod { .get }
+    public var timeoutInterval: TimeInterval? { nil }
     
     /// Constructs a `URLRequest` using the properties provided by the `APIRequest`.
     ///
@@ -43,8 +44,9 @@ extension APIRequest {
             return nil
         }
         
-        // If there are query items, add them to the URL
-        components.queryItems = queryItems
+        if let queryItems, !queryItems.isEmpty {
+            components.queryItems = (components.queryItems ?? []) + queryItems
+        }
         guard let finalURL = components.url else {
             Logger.networking.error("Failed to construct final URL from components: \(components)")
             return nil
@@ -55,6 +57,9 @@ extension APIRequest {
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
         request.httpBody = bodyData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
         Logger.networking.debug("Constructed URLRequest: \(request)")
         return request
     }

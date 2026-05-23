@@ -33,6 +33,24 @@ actor CountingHTTPDownloader: HTTPDownloader {
     }
 }
 
+actor InspectingHTTPDownloader: HTTPResponseDownloader {
+    private var lastRequest: URLRequest?
+    private let payload: HTTPResponsePayload
+
+    init(payload: HTTPResponsePayload) {
+        self.payload = payload
+    }
+
+    func httpResponse(from request: URLRequest) async throws -> HTTPResponsePayload {
+        lastRequest = request
+        return payload
+    }
+
+    func capturedRequest() -> URLRequest? {
+        lastRequest
+    }
+}
+
 final class URLProtocolStub: URLProtocol {
     private static let idHeader = "X-URLProtocolStub-ID"
 
@@ -105,7 +123,7 @@ struct GenericAPIRequestTests {
         let headers = ["Content-Type": "application/json"]
         let baseURL = "https://api.example.com/"
         let path = "users"
-        let request = GenericAPIRequest<String>(baseURL: baseURL, path: path, headers: headers)
+        let request = try GenericAPIRequest<String>(baseURL: baseURL, path: path, headers: headers)
         
         #expect(request.url.deletingLastPathComponent().absoluteString == baseURL)
         #expect(request.method == .get)
@@ -118,7 +136,7 @@ struct GenericAPIRequestTests {
         let headers = ["Authorization": "Bearer token"]
         let body = ["name": "John Doe"]
         
-        let request = GenericAPIRequest<String>(
+        let request = try GenericAPIRequest<String>(
             baseURL: "https://api.example.com",
             path: "/users",
             queryItems: queryItems,
@@ -134,7 +152,7 @@ struct GenericAPIRequestTests {
     }
     @Test("Add query item to GenericAPIRequest")
     func testAddQueryItem() throws {
-        var request = GenericAPIRequest<String>(baseURL: "https://api.example.com", path: "/users")
+        var request = try GenericAPIRequest<String>(baseURL: "https://api.example.com", path: "/users")
         request.addQueryItem(URLQueryItem(name: "page", value: "1"))
         
         #expect(request.queryItems?.count == 1)
@@ -156,7 +174,7 @@ struct ClientTests {
         """.data(using: .utf8)
         
         let client = Client(downloader: mockDownloader)
-        let request = GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
+        let request = try GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
         
         let user = try await client.fetchData(from: request)
         
@@ -174,7 +192,7 @@ struct ClientTests {
         """.data(using: .utf8)
 
         let client = Client(downloader: mockDownloader)
-        let request = GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
+        let request = try GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
 
         do {
             _ = try await client.fetchData(from: request)
@@ -199,7 +217,7 @@ struct ClientTests {
 
         let downloader = CountingHTTPDownloader(data: payload)
         let client = Client(downloader: downloader, cachePolicy: .memory(ttl: 60))
-        let request = GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
+        let request = try GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
 
         _ = try await client.fetchData(from: request)
         _ = try await client.fetchData(from: request)
@@ -210,6 +228,155 @@ struct ClientTests {
         _ = try await client.fetchData(from: request)
         let secondCount = await downloader.count()
         #expect(secondCount == 2)
+    }
+
+    @Test("Volatile headers do not fragment cache keys")
+    func testVolatileHeadersDoNotFragmentCache() async throws {
+        let payload = """
+        {
+            "name": "John Doe",
+            "age": 30
+        }
+        """.data(using: .utf8) ?? Data()
+
+        let downloader = CountingHTTPDownloader(data: payload)
+        let client = Client(downloader: downloader, cachePolicy: .memory(ttl: 60))
+        let firstRequest = try GenericAPIRequest<TestUser>(
+            baseURL: "https://api.example.com",
+            path: "/user",
+            headers: ["X-Request-ID": "first"]
+        )
+        let secondRequest = try GenericAPIRequest<TestUser>(
+            baseURL: "https://api.example.com",
+            path: "/user",
+            headers: ["X-Request-ID": "second"]
+        )
+
+        _ = try await client.fetchData(from: firstRequest)
+        _ = try await client.fetchData(from: secondRequest)
+
+        let count = await downloader.count()
+        #expect(count == 1)
+    }
+
+    @Test("Authenticated requests bypass cache by default")
+    func testAuthenticatedRequestsBypassCacheByDefault() async throws {
+        let payload = """
+        {
+            "name": "John Doe",
+            "age": 30
+        }
+        """.data(using: .utf8) ?? Data()
+
+        let downloader = CountingHTTPDownloader(data: payload)
+        let client = Client(downloader: downloader, cachePolicy: .memory(ttl: 60))
+        let request = try GenericAPIRequest<TestUser>(
+            baseURL: "https://api.example.com",
+            path: "/user",
+            headers: ["Authorization": "Bearer secret-token"]
+        )
+
+        _ = try await client.fetchData(from: request)
+        _ = try await client.fetchData(from: request)
+
+        let count = await downloader.count()
+        #expect(count == 2)
+    }
+
+    @Test("Configured stable headers participate in cache identity")
+    func testConfiguredStableHeadersParticipateInCacheIdentity() async throws {
+        let payload = """
+        {
+            "name": "John Doe",
+            "age": 30
+        }
+        """.data(using: .utf8) ?? Data()
+
+        let downloader = CountingHTTPDownloader(data: payload)
+        let client = Client(
+            downloader: downloader,
+            cachePolicy: .memory(ttl: 60),
+            cacheKeyConfiguration: CacheKeyConfiguration(includedHeaderFields: ["ACCEPT-LANGUAGE"])
+        )
+        let englishRequest = try GenericAPIRequest<TestUser>(
+            baseURL: "https://api.example.com",
+            path: "/user",
+            headers: ["Accept-Language": "en-US"]
+        )
+        let frenchRequest = try GenericAPIRequest<TestUser>(
+            baseURL: "https://api.example.com",
+            path: "/user",
+            headers: ["Accept-Language": "fr-FR"]
+        )
+
+        _ = try await client.fetchData(from: englishRequest)
+        _ = try await client.fetchData(from: frenchRequest)
+        _ = try await client.fetchData(from: englishRequest)
+
+        let count = await downloader.count()
+        #expect(count == 2)
+    }
+
+    @Test("Request middleware can adapt outbound requests")
+    func testRequestMiddleware() async throws {
+        let response = HTTPURLResponse(
+            url: URL(string: "https://api.example.com/user")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )
+        let payload = HTTPResponsePayload(
+            data: """
+            {
+                "name": "John Doe",
+                "age": 30
+            }
+            """.data(using: .utf8) ?? Data(),
+            response: response
+        )
+        let downloader = InspectingHTTPDownloader(payload: payload)
+        let client = Client(
+            downloader: downloader,
+            middlewares: [AuthorizationMiddleware(token: "secret-token")]
+        )
+        let request = try GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
+
+        _ = try await client.fetchData(from: request)
+        let capturedRequest = await downloader.capturedRequest()
+
+        #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer secret-token")
+    }
+
+    @Test("Response middleware can preprocess payloads before decoding")
+    func testResponseMiddleware() async throws {
+        let response = HTTPURLResponse(
+            url: URL(string: "https://api.example.com/user")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["X-Envelope": "wrapped"]
+        )
+        let payload = HTTPResponsePayload(
+            data: """
+            {
+                "payload": {
+                    "name": "Jane Doe",
+                    "age": 28
+                }
+            }
+            """.data(using: .utf8) ?? Data(),
+            response: response
+        )
+        let downloader = InspectingHTTPDownloader(payload: payload)
+        let client = Client(
+            downloader: downloader,
+            middlewares: [EnvelopeMiddleware()]
+        )
+        let request = try GenericAPIRequest<TestUser>(baseURL: "https://api.example.com", path: "/user")
+
+        let user = try await client.fetchData(from: request)
+
+        #expect(user.name == "Jane Doe")
+        #expect(user.age == 28)
     }
 }
 
@@ -234,30 +401,43 @@ struct APIErrorTests {
 struct RetryPolicyTests {
     @Test("Default retry predicate matches expected errors")
     func testDefaultRetryPredicate() {
-        if #available(macOS 13.0, iOS 16.0, *) {
-            #expect(RetryPolicy.defaultRetryPredicate(APIError.networkError) == true)
-            #expect(RetryPolicy.defaultRetryPredicate(APIError.httpStatusCodeFailed(statusCode: 500, description: "server")) == true)
-            #expect(RetryPolicy.defaultRetryPredicate(APIError.httpStatusCodeFailed(statusCode: 404, description: "client")) == false)
-            #expect(RetryPolicy.defaultRetryPredicate(APIError.decodingError(underlyingError: NSError(domain: "Test", code: 2))) == false)
-        }
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.networkError) == true)
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.httpStatusCodeFailed(statusCode: 500, description: "server")) == true)
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.httpStatusCodeFailed(statusCode: 404, description: "client")) == false)
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.invalidBaseURL("invalid")) == false)
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.encodingError(underlyingError: NSError(domain: "Test", code: 1))) == false)
+        #expect(RetryPolicy.defaultRetryPredicate(APIError.decodingError(underlyingError: NSError(domain: "Test", code: 2))) == false)
     }
 
     @Test("Delay grows with attempts and respects caps")
     func testDelayProgression() {
-        if #available(macOS 13.0, iOS 16.0, *) {
-            let policy = RetryPolicy(maximumAttempts: 3, initialDelay: .seconds(1), maximumDelay: .seconds(2), multiplier: 2, jitter: .none)
-            let first = policy.delay(afterAttempt: 1).components.seconds
-            let second = policy.delay(afterAttempt: 2).components.seconds
-            let third = policy.delay(afterAttempt: 3).components.seconds
-            #expect(first == 1)
-            #expect(second == 2)
-            #expect(third == 2)
-        }
+        let policy = RetryPolicy(maximumAttempts: 3, initialDelay: 1, maximumDelay: 2, multiplier: 2, jitter: .none)
+        let first = policy.delay(afterAttempt: 1)
+        let second = policy.delay(afterAttempt: 2)
+        let third = policy.delay(afterAttempt: 3)
+        #expect(first == 1)
+        #expect(second == 2)
+        #expect(third == 2)
     }
 }
 
 @Suite("URLSession Extension Tests")
 struct URLSessionExtensionTests {
+    @Test("Preserves existing query items when appending request query items")
+    func testURLRequestPreservesExistingQueryItems() throws {
+        let request = try GenericAPIRequest<TestUser>(
+            baseURL: "https://example.com/search?lang=en",
+            path: "",
+            queryItems: [URLQueryItem(name: "page", value: "1")]
+        )
+
+        let queryItems = request.urlRequest
+            .flatMap { URLComponents(url: $0.url ?? URL(string: "https://example.com")!, resolvingAgainstBaseURL: false) }?
+            .queryItems
+        #expect(queryItems?.contains(URLQueryItem(name: "lang", value: "en")) == true)
+        #expect(queryItems?.contains(URLQueryItem(name: "page", value: "1")) == true)
+    }
+
     @Test("Returns data for 200 responses")
     func testHTTPDataSuccess() async throws {
         let configuration = URLSessionConfiguration.ephemeral
@@ -294,9 +474,31 @@ struct URLSessionExtensionTests {
             _ = try await session.httpData(from: request)
             Issue.record("Expected APIError.networkError to be thrown")
         } catch let error as APIError {
-            if case .networkError = error {
-                #expect(true)
-            } else {
+            if case .networkError = error {} else {
+                Issue.record("Expected networkError, but got \(error)")
+            }
+        }
+
+        URLProtocolStub.removeEntry(for: stubID)
+    }
+
+    @Test("Maps transport errors to networkError")
+    func testHTTPDataTransportFailure() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        let session = URLSession(configuration: configuration)
+
+        let url = URL(string: "https://example.com")!
+        let stubID = UUID().uuidString
+        URLProtocolStub.setResponse(nil, data: nil, error: URLError(.notConnectedToInternet), for: stubID)
+
+        var request = URLRequest(url: url)
+        request.setValue(stubID, forHTTPHeaderField: "X-URLProtocolStub-ID")
+        do {
+            _ = try await session.httpData(from: request)
+            Issue.record("Expected APIError.networkError to be thrown")
+        } catch let error as APIError {
+            if case .networkError = error {} else {
                 Issue.record("Expected networkError, but got \(error)")
             }
         }
@@ -336,4 +538,33 @@ struct URLSessionExtensionTests {
 struct TestUser: Codable {
     let name: String
     let age: Int
+}
+
+private struct AuthorizationMiddleware: NetworkMiddleware {
+    let token: String
+
+    func prepare(_ request: URLRequest) async throws -> URLRequest {
+        var request = request
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+}
+
+private struct EnvelopeMiddleware: NetworkMiddleware {
+    struct Envelope: Codable {
+        let payload: TestUser
+    }
+
+    func process(_ context: NetworkResponseContext) async throws -> NetworkResponseContext {
+        guard
+            let httpResponse = context.response as? HTTPURLResponse,
+            httpResponse.value(forHTTPHeaderField: "X-Envelope") == "wrapped"
+        else {
+            return context
+        }
+
+        let envelope = try JSONDecoder().decode(Envelope.self, from: context.data)
+        let payloadData = try JSONEncoder().encode(envelope.payload)
+        return context.replacing(data: payloadData)
+    }
 }

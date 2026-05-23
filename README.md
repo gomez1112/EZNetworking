@@ -12,6 +12,10 @@ EZNetworking is a Swift package designed to simplify network requests and API in
 - **Actor-Based Networking**: Utilize Swift's `actor` model to safely manage concurrent network requests.
 - **Automatic Retry with Exponential Backoff**: Configure resilient requests with built-in retry policies and jittered delays.
 - **In-Memory Response Caching**: Opt-in caching with TTL and manual cache clearing.
+- **Middleware Pipeline**: Adapt outgoing requests and preprocess inbound responses for auth, signing, validation, analytics, and envelope unwrapping.
+- **iOS 15-Compatible Retry Delays**: Retry policies now work across the package's declared deployment targets without requiring `Duration`.
+- **Base Query Preservation**: Request-specific query items are appended without dropping query items already present in the base URL.
+- **Consistent Transport Error Mapping**: `URLSession` transport failures are normalized to `APIError.networkError`, which keeps retry behavior predictable.
 
 ## Installation
 
@@ -123,8 +127,8 @@ You can automatically retry failed requests with exponential backoff and jittere
 ```swift
 let retryPolicy = RetryPolicy(
     maximumAttempts: 4,
-    initialDelay: .seconds(0.5),
-    maximumDelay: .seconds(6),
+    initialDelay: 0.5,
+    maximumDelay: 6,
     multiplier: 2,
     jitter: .fractional(0.2)
 )
@@ -151,6 +155,39 @@ Task {
 Task {
     await client.clearCache()
 }
+```
+### Middleware (New)
+You can centralize auth headers, request shaping, response validation, and envelope unwrapping with middleware:
+```swift
+struct AuthorizationMiddleware: NetworkMiddleware {
+    let token: String
+
+    func prepare(_ request: URLRequest) async throws -> URLRequest {
+        var request = request
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+}
+
+struct EnvelopeMiddleware: NetworkMiddleware {
+    struct Envelope<T: Codable>: Codable {
+        let payload: T
+    }
+
+    func process(_ context: NetworkResponseContext) async throws -> NetworkResponseContext {
+        let envelope = try JSONDecoder().decode(Envelope<User>.self, from: context.data)
+        let payload = try JSONEncoder().encode(envelope.payload)
+        return context.replacing(data: payload)
+    }
+}
+
+let client = Client(
+    cachePolicy: .memory(ttl: 60),
+    middlewares: [
+        AuthorizationMiddleware(token: "secret-token"),
+        EnvelopeMiddleware()
+    ]
+)
 ```
 ### Testing
 EZNetworking includes a simple testing setup to mock network responses:
