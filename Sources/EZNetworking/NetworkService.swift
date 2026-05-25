@@ -17,7 +17,7 @@ public protocol NetworkService {
     /// Fetches data from the provided API request.
     ///
     /// This method takes an API request conforming to the `APIRequest` protocol and returns the decoded response.
-    /// The response type must conform to `Codable` to ensure it can be decoded from the fetched data.
+    /// The response type must conform to `Decodable` to ensure it can be decoded from the fetched data.
     ///
     /// - Parameter request: The API request object conforming to `APIRequest`.
     /// - Returns: The decoded response of type `T.Response`.
