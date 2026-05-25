@@ -27,6 +27,7 @@ public final class Client: NetworkService, @unchecked Sendable {
     private let cacheKeyConfiguration: CacheKeyConfiguration
     private let responseCache: MemoryResponseCache?
     private let middlewares: [any NetworkMiddleware]
+    private let baseURL: URL?
     /// The downloader responsible for fetching data from URLs.
     ///
     /// The default implementation uses `URLSession.shared` as the downloader, but any type conforming to
@@ -51,13 +52,15 @@ public final class Client: NetworkService, @unchecked Sendable {
         decoder: JSONDecoder = Client.defaultDecoder(),
         cachePolicy: CachePolicy = .none,
         cacheKeyConfiguration: CacheKeyConfiguration = .default,
-        middlewares: [any NetworkMiddleware] = []
+        middlewares: [any NetworkMiddleware] = [],
+        baseURL: URL? = nil
     ) {
         self.downloader = downloader
         self.decoder = decoder
         self.cachePolicy = cachePolicy
         self.cacheKeyConfiguration = cacheKeyConfiguration
         self.middlewares = middlewares
+        self.baseURL = baseURL
         switch cachePolicy {
         case .none:
             self.responseCache = nil
@@ -67,11 +70,94 @@ public final class Client: NetworkService, @unchecked Sendable {
         Logger.networking.info("Client initialized with custom decoder and downloader.")
     }
 
+    public convenience init(
+        baseURL: String,
+        downloader: any HTTPDownloader = URLSession.shared,
+        decoder: JSONDecoder = Client.defaultDecoder(),
+        cachePolicy: CachePolicy = .none,
+        cacheKeyConfiguration: CacheKeyConfiguration = .default,
+        middlewares: [any NetworkMiddleware] = []
+    ) throws {
+        guard let url = URL(string: baseURL) else {
+            throw APIError.invalidBaseURL(baseURL)
+        }
+        self.init(
+            downloader: downloader,
+            decoder: decoder,
+            cachePolicy: cachePolicy,
+            cacheKeyConfiguration: cacheKeyConfiguration,
+            middlewares: middlewares,
+            baseURL: url
+        )
+    }
+
+    public convenience init(
+        baseURL: URL,
+        downloader: any HTTPDownloader = URLSession.shared,
+        decoder: JSONDecoder = Client.defaultDecoder(),
+        cachePolicy: CachePolicy = .none,
+        cacheKeyConfiguration: CacheKeyConfiguration = .default,
+        middlewares: [any NetworkMiddleware] = []
+    ) {
+        self.init(
+            downloader: downloader,
+            decoder: decoder,
+            cachePolicy: cachePolicy,
+            cacheKeyConfiguration: cacheKeyConfiguration,
+            middlewares: middlewares,
+            baseURL: baseURL
+        )
+    }
+
     public static func defaultDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .deferredToDate
         decoder.keyDecodingStrategy = .useDefaultKeys
         return decoder
+    }
+
+    public func request<Response: Decodable>(
+        _ responseType: Response.Type = Response.self,
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .get,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        bodyData: Data? = nil,
+        timeoutInterval: TimeInterval? = nil
+    ) throws -> GenericAPIRequest<Response> {
+        try GenericAPIRequest(
+            baseURL: resolvedBaseURLString(baseURL),
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            bodyData: bodyData,
+            timeoutInterval: timeoutInterval
+        )
+    }
+
+    public func request<Response: Decodable, Body: Encodable>(
+        _ responseType: Response.Type = Response.self,
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .post,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        body: Body,
+        bodyEncoder: JSONEncoder = JSONEncoder(),
+        timeoutInterval: TimeInterval? = nil
+    ) throws -> GenericAPIRequest<Response> {
+        try GenericAPIRequest(
+            baseURL: resolvedBaseURLString(baseURL),
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            body: body,
+            bodyEncoder: bodyEncoder,
+            timeoutInterval: timeoutInterval
+        )
     }
     /// Decodes the provided data into the specified type using the configured `JSONDecoder`.
     ///
@@ -160,6 +246,104 @@ public final class Client: NetworkService, @unchecked Sendable {
         return try decode(data)
     }
 
+    public func fetch<Response: Decodable>(
+        _ responseType: Response.Type = Response.self,
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .get,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        bodyData: Data? = nil,
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> Response {
+        let request: GenericAPIRequest<Response> = try self.request(
+            responseType,
+            baseURL: baseURL,
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            bodyData: bodyData,
+            timeoutInterval: timeoutInterval
+        )
+        return try await fetchData(from: request)
+    }
+
+    public func fetch<Response: Decodable, Body: Encodable>(
+        _ responseType: Response.Type = Response.self,
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .post,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        body: Body,
+        bodyEncoder: JSONEncoder = JSONEncoder(),
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> Response {
+        let request: GenericAPIRequest<Response> = try self.request(
+            responseType,
+            baseURL: baseURL,
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            body: body,
+            bodyEncoder: bodyEncoder,
+            timeoutInterval: timeoutInterval
+        )
+        return try await fetchData(from: request)
+    }
+
+    public func data<T: APIRequest>(from request: T) async throws -> Data {
+        try await downloadData(for: request)
+    }
+
+    public func data(
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .get,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        bodyData: Data? = nil,
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> Data {
+        let request: GenericAPIRequest<Data> = try self.request(
+            Data.self,
+            baseURL: baseURL,
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            bodyData: bodyData,
+            timeoutInterval: timeoutInterval
+        )
+        return try await data(from: request)
+    }
+
+    public func data<Body: Encodable>(
+        baseURL: String? = nil,
+        path: String,
+        queryItems: [URLQueryItem]? = nil,
+        method: HTTPMethod = .post,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        body: Body,
+        bodyEncoder: JSONEncoder = JSONEncoder(),
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> Data {
+        let request: GenericAPIRequest<Data> = try self.request(
+            Data.self,
+            baseURL: baseURL,
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            headers: headers,
+            body: body,
+            bodyEncoder: bodyEncoder,
+            timeoutInterval: timeoutInterval
+        )
+        return try await data(from: request)
+    }
+
     public func clearCache() async {
         guard let responseCache else {
             return
@@ -233,5 +417,19 @@ public final class Client: NetworkService, @unchecked Sendable {
 
         let data = try await downloader.httpData(from: request)
         return HTTPResponsePayload(data: data, response: nil)
+    }
+
+    private func resolvedBaseURLString(_ baseURLString: String?) throws -> String {
+        if let baseURLString {
+            guard URL(string: baseURLString) != nil else {
+                throw APIError.invalidBaseURL(baseURLString)
+            }
+            return baseURLString
+        }
+
+        guard let baseURL else {
+            throw APIError.invalidBaseURL("")
+        }
+        return baseURL.absoluteString
     }
 }

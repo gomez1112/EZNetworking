@@ -159,6 +159,20 @@ struct GenericAPIRequestTests {
         #expect(request.queryItems?[0].name == "page")
         #expect(request.queryItems?[0].value == "1")
     }
+
+    @Test("Create comma-separated query items")
+    func testCommaSeparatedQueryItems() throws {
+        let queryItems: [URLQueryItem]? = .commaSeparated(name: "ids", values: ["1", "2", "3"])
+
+        #expect(queryItems == [URLQueryItem(name: "ids", value: "1,2,3")])
+    }
+
+    @Test("Comma-separated query items are nil for empty filters")
+    func testEmptyCommaSeparatedQueryItems() throws {
+        let queryItems: [URLQueryItem]? = .commaSeparated(name: "ids", values: [])
+
+        #expect(queryItems == nil)
+    }
 }
 
 @Suite("Client Tests")
@@ -180,6 +194,78 @@ struct ClientTests {
         
         #expect(user.name == "John Doe")
         #expect(user.age == 30)
+    }
+
+    @Test("Fetch convenience builds and decodes a request")
+    func testFetchConvenience() async throws {
+        var mockDownloader = MockHTTPDownloader()
+        mockDownloader.data = """
+        {
+            "name": "Jane Doe",
+            "age": 28
+        }
+        """.data(using: .utf8)
+
+        let client = try Client(baseURL: "https://api.example.com", downloader: mockDownloader)
+        let user: TestUser = try await client.fetch(path: "/user")
+
+        #expect(user.name == "Jane Doe")
+        #expect(user.age == 28)
+    }
+
+    @Test("URL base initializer does not throw")
+    func testURLBaseInitializer() async throws {
+        var mockDownloader = MockHTTPDownloader()
+        mockDownloader.data = """
+        {
+            "name": "Jane Doe",
+            "age": 28
+        }
+        """.data(using: .utf8)
+
+        let baseURL = try #require(URL(string: "https://api.example.com"))
+        let client = Client(baseURL: baseURL, downloader: mockDownloader)
+        let user: TestUser = try await client.fetch(path: "/user")
+
+        #expect(user.name == "Jane Doe")
+        #expect(user.age == 28)
+    }
+
+    @Test("Raw data convenience returns response bytes")
+    func testRawDataConvenience() async throws {
+        let payload = HTTPResponsePayload(
+            data: "image-bytes".data(using: .utf8) ?? Data(),
+            response: HTTPURLResponse(
+                url: URL(string: "https://api.example.com/images/icon")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )
+        )
+        let downloader = InspectingHTTPDownloader(payload: payload)
+        let client = try Client(baseURL: "https://api.example.com", downloader: downloader)
+
+        let data = try await client.data(path: "/images/icon", headers: nil)
+        let capturedRequest = await downloader.capturedRequest()
+
+        #expect(String(data: data, encoding: .utf8) == "image-bytes")
+        #expect(capturedRequest?.url?.absoluteString == "https://api.example.com/images/icon")
+    }
+
+    @Test("Body convenience encodes outbound payloads")
+    func testBodyConvenience() async throws {
+        let payload = HTTPResponsePayload(data: Data(), response: nil)
+        let downloader = InspectingHTTPDownloader(payload: payload)
+        let client = try Client(baseURL: "https://api.example.com", downloader: downloader)
+
+        _ = try await client.data(
+            path: "/loggedhabit",
+            body: ["habitName": "Run"]
+        )
+        let capturedRequest = await downloader.capturedRequest()
+
+        #expect(capturedRequest?.httpMethod == "POST")
+        #expect(capturedRequest?.httpBody != nil)
     }
     
     @Test("Fetch data with decoding error")

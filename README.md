@@ -1,129 +1,298 @@
 # EZNetworking
 
-EZNetworking is a Swift package designed to simplify network requests and API interactions in your iOS and macOS applications. It provides a clean and easy-to-use abstraction over `URLSession` for handling HTTP requests, response decoding, and error handling.
+EZNetworking is a small Swift package for building HTTP clients without repeating `URLSession` boilerplate. It handles request construction, response validation, JSON decoding, raw data downloads, retries, in-memory caching, and middleware.
 
 ## Features
 
-- **Protocol-Oriented Design**: Leverage protocols like `APIRequest` and `HTTPDownloader` to create customizable network requests and responses.
-- **Default Implementations**: Simplify your network code with default headers, body data, and HTTP method handling.
-- **Customizable JSON Decoding**: Inject your own `JSONDecoder` to handle various decoding strategies.
-- **Error Handling**: Comprehensive error handling with detailed localized error descriptions.
-- **Extensible Request Building**: Create and modify API requests with flexible query items and HTTP methods.
-- **Actor-Based Networking**: Utilize Swift's `actor` model to safely manage concurrent network requests.
-- **Automatic Retry with Exponential Backoff**: Configure resilient requests with built-in retry policies and jittered delays.
-- **In-Memory Response Caching**: Opt-in caching with TTL and manual cache clearing.
-- **Middleware Pipeline**: Adapt outgoing requests and preprocess inbound responses for auth, signing, validation, analytics, and envelope unwrapping.
-- **iOS 15-Compatible Retry Delays**: Retry policies now work across the package's declared deployment targets without requiring `Duration`.
-- **Base Query Preservation**: Request-specific query items are appended without dropping query items already present in the base URL.
-- **Consistent Transport Error Mapping**: `URLSession` transport failures are normalized to `APIError.networkError`, which keeps retry behavior predictable.
+- Simple `Client(baseURL:)` setup for API services.
+- Direct JSON helpers with `client.fetch(path:)`.
+- Raw byte helpers with `client.data(path:)` for images, files, and empty responses.
+- `Decodable` response models with no required `Sendable`, `Codable`, `nonisolated`, or `@preconcurrency` app-side workarounds.
+- Encodable request bodies with optional custom `JSONEncoder`.
+- Typed `APIError` failures for invalid URLs, HTTP status codes, decoding, encoding, and network errors.
+- Optional retry policies with exponential backoff and jitter.
+- Optional in-memory response caching with TTL.
+- Middleware for auth, signing, request adaptation, response preprocessing, analytics, and envelope unwrapping.
+- Testable networking through `HTTPDownloader`.
 
 ## Installation
 
-### Swift Package Manager
-
-To integrate EZNetworking into your project using Swift Package Manager, add the following dependency in your `Package.swift` file:
+Add EZNetworking with Swift Package Manager:
 
 ```swift
 dependencies: [
     .package(url: "https://github.com/yourusername/EZNetworking.git", from: "1.5.1")
 ]
 ```
-## Usage
 
-### Creating a Client
-The Client actor is the primary component for making network requests. You can customize it with your own `HTTPDownloader` and `JSONDecoder` if needed.
+Then add `EZNetworking` to your target dependencies.
+
+## Quick Start
 
 ```swift
+import Foundation
 import EZNetworking
 
-let client = Client()
+struct Habit: Decodable {
+    let name: String
+    let category: Category
+    let info: String
+}
 
+struct Category: Decodable {
+    let name: String
+    let color: HSBColor
+}
+
+struct HSBColor: Decodable {
+    let h: Double
+    let s: Double
+    let b: Double
+}
+
+let client = try Client(baseURL: "http://localhost:8080")
+
+let habits: [Habit] = try await client.fetch(path: "habits")
 ```
-Or with custom configurations
-```swift
-let customDecoder = JSONDecoder()
-customDecoder.dateDecodingStrategy = .iso8601
 
-let client = Client(decoder: customDecoder)
-```
+Your response models only need to be `Decodable`.
 
-### Making a Request
-Create a request using `GenericAPIRequest`:
-```swift
-let url = "https://randomuser.me"
-let path = "/api/"
-let request = GenericAPIRequest<User>(baseURL: url, path: path)
-```
+## A Complete Service Example
 
-### Fetching Data
-Use the `Client` to fetch data from the API:
 ```swift
-Task {
-    do {
-        let user = try await client.fetchData(from: request)
-        print(user.results.first?.name.first ?? "No name")
-    } catch {
-        print("Failed to fetch data: \(error.localizedDescription)")
+import Foundation
+import EZNetworking
+
+final class HabitService {
+    private let client: Client
+
+    init(client: Client) {
+        self.client = client
+    }
+
+    func fetchHabits() async throws -> ActivityDictionary {
+        try await client.fetch(path: HabitEndpoint.habits.path)
+    }
+
+    func fetchUsers() async throws -> UserDictionary {
+        try await client.fetch(path: HabitEndpoint.users.path)
+    }
+
+    func fetchImageData(named imageName: String) async throws -> Data {
+        try await client.data(path: HabitEndpoint.images(imageName).path, headers: nil)
+    }
+
+    func fetchUserStats(ids: [String]? = nil) async throws -> UserHabitDataList {
+        try await client.fetch(
+            path: HabitEndpoint.userStats.path,
+            queryItems: .commaSeparated(name: "ids", values: ids)
+        )
+    }
+
+    func fetchHabitStats(names: [String]? = nil) async throws -> HabitUserDataList {
+        try await client.fetch(
+            path: HabitEndpoint.habitStats.path,
+            queryItems: .commaSeparated(name: "names", values: names)
+        )
+    }
+
+    func fetchCombinedStats() async throws -> CombinedStatisticsResponse {
+        try await client.fetch(path: HabitEndpoint.combinedStats.path)
+    }
+
+    func fetchLeadingStats(for userID: String) async throws -> UserHabitData {
+        try await client.fetch(path: HabitEndpoint.userLeadingStats(userID).path)
+    }
+
+    func logHabit(userID: String, habitName: String, timestamp: Date = Date()) async throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        _ = try await client.data(
+            path: HabitEndpoint.loggedHabit.path,
+            body: LoggedHabit(userID: userID, habitName: habitName, timestamp: timestamp),
+            bodyEncoder: encoder
+        )
     }
 }
-```
-### Using an API Key
-If your API requires an API key, you can include it in the headers of your request:
-```swift
-let url = "https://api.example.com"
-let path = "/data"
-let headers = ["Authorization": "Bearer YOUR_API_KEY"]
 
-let request = GenericAPIRequest<MyDataModel>(
-    baseURL: url,
-    path: path,
-    headers: headers
-)
-```
-### Using Query Items
-If you need to include query parameters in your API request, you can use the queryItems property:
-```swift
-let url = "https://api.example.com"
-let path = "/search"
-let queryItems = [
-    URLQueryItem(name: "query", value: "Swift"),
-    URLQueryItem(name: "limit", value: "10")
-]
+enum HabitEndpoint {
+    case users
+    case habits
+    case images(String)
+    case userStats
+    case habitStats
+    case combinedStats
+    case userLeadingStats(String)
+    case loggedHabit
 
-let request = GenericAPIRequest<MySearchResults>(
-    baseURL: url,
-    path: path,
-    queryItems: queryItems
-)
-```
-### Error Handling
-EZNetworking provides detailed error handling through the `APIError` enum:
-```swift
-enum APIError: Error, LocalizedError {
-    case invalidURL
-    case httpStatusCodeFailed(statusCode: Int, description: String)
-    case decodingError(underlyingError: Error)
-    case networkError
-    case unknownError
-    
-    var errorDescription: String? {
+    var path: String {
         switch self {
-        case .invalidURL:
-            return "The URL provided was invalid."
-        case .httpStatusCodeFailed(let statusCode, let description):
-            return "HTTP request failed with status code \(statusCode): \(description)."
-        case .decodingError(let underlyingError):
-            return "Failed to decode the response: \(underlyingError)."
-        case .networkError:
-            return "There was a network error."
-        case .unknownError:
-            return "An unknown error has occurred."
+        case .users:
+            "users"
+        case .habits:
+            "habits"
+        case .images(let imageName):
+            "images/\(imageName)"
+        case .userStats:
+            "userStats"
+        case .habitStats:
+            "habitStats"
+        case .combinedStats:
+            "combinedStats"
+        case .userLeadingStats(let userID):
+            "userLeadingStats/\(userID)"
+        case .loggedHabit:
+            "loggedhabit"
         }
     }
 }
 ```
-### Retrying Requests with Backoff (New)
-You can automatically retry failed requests with exponential backoff and jittered delays:
+
+Usage:
+
+```swift
+do {
+    let client = try Client(baseURL: "http://localhost:8080")
+    let service = HabitService(client: client)
+    let habits = try await service.fetchHabits()
+    print(habits)
+} catch {
+    print(error.localizedDescription)
+}
+```
+
+## Client Setup
+
+Use a throwing string initializer when the base URL comes from configuration:
+
+```swift
+let client = try Client(baseURL: "https://api.example.com")
+```
+
+Use the non-throwing `URL` initializer when a caller already gives you a validated URL:
+
+```swift
+func makeClient(baseURL: URL) -> Client {
+    Client(baseURL: baseURL)
+}
+```
+
+Customize decoding:
+
+```swift
+let decoder = JSONDecoder()
+decoder.dateDecodingStrategy = .iso8601
+
+let client = try Client(
+    baseURL: "https://api.example.com",
+    decoder: decoder
+)
+```
+
+## Requests
+
+Fetch decoded JSON:
+
+```swift
+let users: [User] = try await client.fetch(path: "users")
+```
+
+Add query items:
+
+```swift
+let results: SearchResults = try await client.fetch(
+    path: "search",
+    queryItems: [
+        URLQueryItem(name: "query", value: "Swift"),
+        URLQueryItem(name: "limit", value: "10")
+    ]
+)
+```
+
+Add headers:
+
+```swift
+let profile: Profile = try await client.fetch(
+    path: "profile",
+    headers: ["Authorization": "Bearer \(token)"]
+)
+```
+
+Send an encodable body:
+
+```swift
+struct CreateHabitRequest: Encodable {
+    let name: String
+    let categoryID: String
+}
+
+struct CreateHabitResponse: Decodable {
+    let id: String
+    let name: String
+}
+
+let response: CreateHabitResponse = try await client.fetch(
+    path: "habits",
+    body: CreateHabitRequest(name: "Run", categoryID: "fitness")
+)
+```
+
+Download raw data:
+
+```swift
+let imageData = try await client.data(path: "images/avatar.png", headers: nil)
+```
+
+Send a request that does not need a decoded response:
+
+```swift
+_ = try await client.data(
+    path: "loggedhabit",
+    body: LoggedHabit(userID: userID, habitName: habitName, timestamp: Date())
+)
+```
+
+## Manual Request Objects
+
+You can still build a `GenericAPIRequest` directly when that fits your architecture:
+
+```swift
+let request = try GenericAPIRequest<User>(
+    baseURL: "https://api.example.com",
+    path: "users/123"
+)
+
+let user = try await client.fetchData(from: request)
+```
+
+## Error Handling
+
+EZNetworking throws `APIError` for common failure modes:
+
+```swift
+do {
+    let users: [User] = try await client.fetch(path: "users")
+    print(users)
+} catch APIError.invalidBaseURL(let url) {
+    print("Invalid base URL: \(url)")
+} catch APIError.invalidURL {
+    print("Could not build the request URL.")
+} catch APIError.httpStatusCodeFailed(let statusCode, let description) {
+    print("HTTP \(statusCode): \(description)")
+} catch APIError.decodingError(let underlyingError) {
+    print("Decoding failed: \(underlyingError)")
+} catch APIError.encodingError(let underlyingError) {
+    print("Encoding failed: \(underlyingError)")
+} catch APIError.networkError {
+    print("Network request failed.")
+} catch {
+    print("Unexpected error: \(error)")
+}
+```
+
+## Retry
+
 ```swift
 let retryPolicy = RetryPolicy(
     maximumAttempts: 4,
@@ -133,31 +302,38 @@ let retryPolicy = RetryPolicy(
     jitter: .fractional(0.2)
 )
 
-Task {
-    do {
-        let user = try await client.fetchData(from: request, retryPolicy: retryPolicy)
-        print(user.results.first?.name.first ?? "No name")
-    } catch {
-        print("Request failed after retries: \(error.localizedDescription)")
-    }
-}
+let request = try client.request(User.self, path: "users/123")
+let user = try await client.fetchData(from: request, retryPolicy: retryPolicy)
 ```
-### Caching Responses (New)
-You can enable in-memory caching with a TTL and clear it when needed:
+
+## Caching
+
 ```swift
-let client = Client(cachePolicy: .memory(ttl: 60))
+let client = try Client(
+    baseURL: "https://api.example.com",
+    cachePolicy: .memory(ttl: 60)
+)
 
-Task {
-    let user = try await client.fetchData(from: request)
-    print(user.results.first?.name.first ?? "No name")
-}
-
-Task {
-    await client.clearCache()
-}
+let users: [User] = try await client.fetch(path: "users")
+await client.clearCache()
 ```
-### Middleware (New)
-You can centralize auth headers, request shaping, response validation, and envelope unwrapping with middleware:
+
+By default, requests with authentication-related headers bypass the cache. You can opt in to stable header fields when they should participate in cache identity:
+
+```swift
+let client = try Client(
+    baseURL: "https://api.example.com",
+    cachePolicy: .memory(ttl: 60),
+    cacheKeyConfiguration: CacheKeyConfiguration(
+        includedHeaderFields: ["Accept-Language"]
+    )
+)
+```
+
+## Middleware
+
+Middleware can adapt outbound requests and preprocess inbound responses.
+
 ```swift
 struct AuthorizationMiddleware: NetworkMiddleware {
     let token: String
@@ -169,52 +345,80 @@ struct AuthorizationMiddleware: NetworkMiddleware {
     }
 }
 
-struct EnvelopeMiddleware: NetworkMiddleware {
-    struct Envelope<T: Codable>: Codable {
-        let payload: T
+struct User: Codable {
+    let name: String
+    let age: Int
+}
+
+struct UserEnvelopeMiddleware: NetworkMiddleware {
+    struct Envelope: Decodable {
+        let payload: User
     }
 
     func process(_ context: NetworkResponseContext) async throws -> NetworkResponseContext {
-        let envelope = try JSONDecoder().decode(Envelope<User>.self, from: context.data)
-        let payload = try JSONEncoder().encode(envelope.payload)
-        return context.replacing(data: payload)
+        let envelope = try JSONDecoder().decode(Envelope.self, from: context.data)
+        let payloadData = try JSONEncoder().encode(envelope.payload)
+        return context.replacing(data: payloadData)
     }
 }
+```
 
-let client = Client(
-    cachePolicy: .memory(ttl: 60),
+```swift
+let client = try Client(
+    baseURL: "https://api.example.com",
     middlewares: [
-        AuthorizationMiddleware(token: "secret-token"),
-        EnvelopeMiddleware()
+        AuthorizationMiddleware(token: token),
+        UserEnvelopeMiddleware()
     ]
 )
 ```
-### Testing
-EZNetworking includes a simple testing setup to mock network responses:
+
+## Testing
+
+Inject an `HTTPDownloader` to test without real network calls:
 
 ```swift
+import Foundation
 import Testing
 @testable import EZNetworking
 
-final class Downloader: HTTPDownloader {
-    func httpData(from url: URL) async throws -> Data {
-        try await Task.sleep(for: .milliseconds(Int.random(in: 100...500)))
-        return testUser
-    }
-    
-    @Test
-    func testClientDoesFetchUserData() async throws {
-        let downloader = Downloader()
-        let client = Client(downloader: downloader)
-        let request = GenericAPIRequest<User>(baseURL: "https://randomuser.me", path: "/api/")
-        let user = try await client.fetchData(from: request)
-        #expect(user.results.count == 1)
+struct MockDownloader: HTTPDownloader {
+    let data: Data
+
+    func httpData(from request: URLRequest) async throws -> Data {
+        data
     }
 }
+
+@Test
+func clientFetchesUser() async throws {
+    let data = Data("""
+    {
+        "name": "Jane Doe",
+        "age": 28
+    }
+    """.utf8)
+
+    let client = try Client(
+        baseURL: "https://api.example.com",
+        downloader: MockDownloader(data: data)
+    )
+
+    let user: User = try await client.fetch(path: "user")
+
+    #expect(user.name == "Jane Doe")
+    #expect(user.age == 28)
+}
 ```
-![Static Badge](https://img.shields.io/badge/platform-iOS%20%7C%20macOS-purple?style=flat&logo=swift&logoColor=purple) ![Static Badge](https://img.shields.io/badge/swift-6.0%20%7C%205.10%20%7C%205.9%20%7C%205.8-purple?style=flat&logo=swift&logoColor=purple)
 
+## Requirements
 
+- Swift 6.2 tools
+- iOS 15+
+- macOS 12+
+
+![Static Badge](https://img.shields.io/badge/platform-iOS%20%7C%20macOS-purple?style=flat&logo=swift&logoColor=purple)
 
 ## Contributing
-Contributions are welcome! Please feel free to submit a pull request or open an issue to help improve EZNetworking.
+
+Contributions are welcome. Open an issue or submit a pull request to help improve EZNetworking.

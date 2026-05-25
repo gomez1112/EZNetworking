@@ -41,6 +41,7 @@ public struct GenericAPIRequest<Response: Decodable>: APIRequest, Sendable {
         method: HTTPMethod = .get,
         headers: [String: String]? = ["Content-Type": "application/json"],
         body: T? = nil,
+        bodyEncoder: JSONEncoder = JSONEncoder(),
         timeoutInterval: TimeInterval? = nil
     ) throws {
         guard let base = URL(string: baseURL) else {
@@ -52,7 +53,7 @@ public struct GenericAPIRequest<Response: Decodable>: APIRequest, Sendable {
         self.headers = headers
         self.timeoutInterval = timeoutInterval
         do {
-            self.bodyData = try body.map { try JSONEncoder().encode($0) }
+            self.bodyData = try body.map { try bodyEncoder.encode($0) }
         } catch {
             throw APIError.encodingError(underlyingError: error)
         }
