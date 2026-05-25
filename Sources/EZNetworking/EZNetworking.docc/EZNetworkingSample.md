@@ -273,16 +273,16 @@ final class MockClient: NetworkService {
         self.shouldFail = shouldFail
     }
     
-    func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
+    func fetchData<R: Decodable>(from request: GenericAPIRequest<R>) async throws -> R {
         if shouldFail {
             throw APIError.networkError
         }
         
         // Return mock data based on request type
-        if T.Response.self == Menu.self {
-            return mockMenuData() as! T.Response
-        } else if T.Response.self == Restaurant.self {
-            return mockRestaurantData() as! T.Response
+        if R.self == Menu.self {
+            return mockMenuData() as! R
+        } else if R.self == Restaurant.self {
+            return mockRestaurantData() as! R
         }
         
         throw APIError.unknownError
@@ -345,5 +345,4 @@ To integrate EZNetworking into your own restaurant or food service app:
 6. **Add comprehensive tests** using mock networking
 
 The Restaurant sample app provides a complete reference implementation showing best practices for integrating EZNetworking into a real-world iOS application.
-
 

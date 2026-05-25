@@ -13,7 +13,7 @@ import Foundation
 /// and reusable way to create API requests. It allows you to specify the type of response expected from the API,
 /// as well as various properties such as the URL, HTTP method, headers, query items, and request body.
 
-public struct GenericAPIRequest<Response: Codable & Sendable>: APIRequest {
+public struct GenericAPIRequest<Response: Decodable>: APIRequest {
     public var url: URL
     public var queryItems: [URLQueryItem]?
     public var method: HTTPMethod
@@ -34,7 +34,7 @@ public struct GenericAPIRequest<Response: Codable & Sendable>: APIRequest {
     ///   - headers: An optional dictionary of HTTP headers to include in the request.
     ///   - body: An optional body to include in the request, encoded as JSON.
     
-    public init<T: Codable>(
+    public init<T: Encodable>(
         baseURL: String,
         path: String,
         queryItems: [URLQueryItem]? = nil,

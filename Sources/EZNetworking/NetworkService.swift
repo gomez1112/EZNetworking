@@ -22,7 +22,7 @@ public protocol NetworkService {
     /// - Parameter request: The API request object conforming to `APIRequest`.
     /// - Returns: The decoded response of type `T.Response`.
     /// - Throws: An error if the data cannot be fetched or decoded.
-    func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable
+    func fetchData<R: Decodable>(from request: GenericAPIRequest<R>) async throws -> R
 }
 /// A protocol that defines a downloader responsible for retrieving data over HTTP.
 ///

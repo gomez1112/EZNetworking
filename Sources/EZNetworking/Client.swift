@@ -7,14 +7,14 @@
 
 import Foundation
 import os
-/// An actor responsible for managing network requests and decoding responses.
+/// A thread-safe client responsible for managing network requests and decoding responses.
 ///
-/// The `Client` actor provides a safe and efficient way to fetch data from APIs,
-/// ensuring that network requests and response decoding are performed in a thread-safe manner.
-/// By using an actor, the `Client` guarantees that all network operations are safely handled
-/// in a concurrent environment, preventing data races and ensuring data consistency.
+/// The `Client` provides a safe and efficient way to fetch data from APIs,
+/// ensuring that network requests, caching, and response decoding are handled safely.
 
-public actor Client: NetworkService {
+/// `Client` is sendable because its configuration is immutable, cache mutation is isolated
+/// inside `MemoryResponseCache`, and access to the shared decoder is serialized by `decoderLock`.
+public final class Client: NetworkService, @unchecked Sendable {
     /// The `JSONDecoder` instance used for decoding responses.
     ///
     /// This decoder can be customized to allow different decoding strategies, such as handling different
@@ -22,6 +22,7 @@ public actor Client: NetworkService {
     /// for dates and the `.useDefaultKeys` strategy for keys.
     
     private let decoder: JSONDecoder
+    private let decoderLock = NSLock()
     private let cachePolicy: CachePolicy
     private let cacheKeyConfiguration: CacheKeyConfiguration
     private let responseCache: MemoryResponseCache?
@@ -82,7 +83,10 @@ public actor Client: NetworkService {
     /// - Returns: The decoded object of type `T`.
     /// - Throws: An `APIError.decodingError` if the data cannot be decoded, or `APIError.unknownError` for other unexpected errors.
     
-    public func decode<T: Codable>(_ data: Data) throws -> T {
+    public func decode<T: Decodable>(_ data: Data) throws -> T {
+        decoderLock.lock()
+        defer { decoderLock.unlock() }
+
         do {
             let decodedObject = try decoder.decode(T.self, from: data)
             Logger.networking.debug("Decoded response as \(String(describing: T.self), privacy: .public)")
@@ -144,7 +148,13 @@ public actor Client: NetworkService {
     /// - Returns: The decoded response object of the associated type `T.Response`.
     /// - Throws: An error if the data cannot be fetched or decoded.
     
-    public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response where T.Response: Codable & Sendable {
+    public func fetchData<T: APIRequest>(from request: T) async throws -> T.Response {
+        let data = try await downloadData(for: request)
+        Logger.networking.debug("Data received: \(data.count) bytes")
+        return try decode(data)
+    }
+
+    public func fetchData<R: Decodable>(from request: GenericAPIRequest<R>) async throws -> R {
         let data = try await downloadData(for: request)
         Logger.networking.debug("Data received: \(data.count) bytes")
         return try decode(data)
@@ -169,7 +179,7 @@ public actor Client: NetworkService {
     public func fetchData<T: APIRequest>(
         from request: T,
         retryPolicy: RetryPolicy
-    ) async throws -> T.Response where T.Response: Codable & Sendable {
+    ) async throws -> T.Response {
         var attempt = 1
 
         while true {

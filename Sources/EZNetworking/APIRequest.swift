@@ -15,15 +15,14 @@ import Foundation
 ///
 /// The `APIRequest` protocol defines the structure of a network request, ensuring that
 /// all required components are specified for proper execution. Each API request must specify
-/// the response type it expects, which must conform to both `Codable` and `Sendable`.
+/// the response type it expects, which must be decodable from the response payload.
 
-public protocol APIRequest: Sendable {
+public protocol APIRequest {
     /// The type of the response that will be returned by this API request.
     ///
-    /// This associated type defines the expected response type for the API request. The response
-    /// the network response and used in a concurrency-safe manner.
+    /// This associated type defines the expected response type for the API request.
     
-    associatedtype Response: Codable & Sendable
+    associatedtype Response: Decodable
     /// The base URL for the API request, typically including the scheme, host, and path.
     ///
     /// This property represents the URL where the API request will be sent. It is expected to
